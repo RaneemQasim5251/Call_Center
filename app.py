@@ -348,15 +348,19 @@ k1,k2,k3,k4 = st.columns([1,1,1,1])
 
 with k1:
     delta_html = ""
+    helper_html = ""
     if kpi_delta is not None:
         cls = "delta-pos" if kpi_delta>0 else ("delta-neg" if kpi_delta<0 else "")
         sign = "+" if kpi_delta>0 else ("" if kpi_delta==0 else "")
         delta_html = f'<div class="{cls}" style="margin-top:.3rem;">{sign}{kpi_delta}</div>'
+        helper_html = '<div style="margin-top:.35rem;color:#9FB3C8;font-size:.9rem;">مقارنةً بالشهر السابق ضمن نفس النطاق</div>'
+    else:
+        helper_html = '<div class="badge" style="margin-top:.35rem;">لا يوجد شهر سابق للمقارنة</div>'
     st.markdown(f"""<div class="kpi i1">
       <div class="title">إجمالي الاتصالات</div>
       <div class="value">{total_calls}</div>
       {delta_html}
-      <div style="margin-top:.35rem;color:#9FB3C8;font-size:.9rem;">مقارنةً بالشهر السابق ضمن نفس النطاق</div>
+      {helper_html}
     </div>""", unsafe_allow_html=True)
 
 top_m, top_m_n = top_month_overall()
@@ -613,5 +617,3 @@ def arabic_ai_summary(df: pd.DataFrame) -> str:
     return " ".join(parts)
 st.write(arabic_ai_summary(filtered))
 st.markdown('</div>', unsafe_allow_html=True)
-
-
