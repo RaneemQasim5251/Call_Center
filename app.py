@@ -694,63 +694,77 @@ else:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# =============== خريطة (مدن/مناطق) ===============
+# ───────────────────────── Map (static lat/lon) ─────────────────────────
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
 st.markdown("### خريطة الاتصالات حسب المدينة/المنطقة")
+
 CITY_LATLON = {
-    "الرياض": (24.7136, 46.6753), "جدة": (21.4858, 39.1925), "مكة": (21.3891, 39.8579),
-    "المدينة": (24.5247, 39.5692), "الدمام": (26.3927, 49.9777), "الخبر": (26.2794, 50.2083),
-    "الطائف": (21.2703, 40.4158), "أبها": (18.2465, 42.5117), "حائل": (27.5114, 41.7208),
-    "تبوك": (28.3838, 36.5662), "جازان": (16.8892, 42.5700)
+    "الرياض": (24.7136, 46.6753),
+    "جدة": (21.4858, 39.1925),
+    "مكة": (21.3891, 39.8579),
+    "المدينة": (24.5247, 39.5692),
+    "الدمام": (26.3927, 49.9777),
+    "الخبر": (26.2794, 50.2083),
+    "الطائف": (21.2703, 40.4158),
+    "أبها": (18.2465, 42.5117),
+    "حائل": (27.5114, 41.7208),
+    "تبوك": (28.3838, 36.5662),
+    "جازان": (16.8892, 42.5700),
 }
 REGION_LATLON = {
-    "المنطقة الشرقية": (26.5, 49.8), "منطقة الرياض": (24.7, 46.7), "منطقة مكة": (21.4, 40.7),
-    "منطقة المدينة": (24.6, 39.6), "منطقة القصيم": (26.3, 43.96), "منطقة تبوك": (28.4, 36.6),
-    "منطقة حائل": (27.5, 41.7), "منطقة جازان": (16.9, 42.6), "منطقة نجران": (17.6, 44.4),
-    "منطقة عسير": (18.2, 42.5), "منطقة الجوف": (29.97, 40.2), "الحدود الشمالية": (30.0, 41.0),
-    "منطقة الباحة": (20.0, 41.45), "منطقة الطائف": (21.27, 40.42)
+    "المنطقة الشرقية": (26.5, 49.8),
+    "منطقة الرياض": (24.7, 46.7),
+    "منطقة مكة": (21.4, 40.7),
+    "منطقة المدينة": (24.6, 39.6),
+    "منطقة القصيم": (26.3, 43.96),
+    "منطقة تبوك": (28.4, 36.6),
+    "منطقة حائل": (27.5, 41.7),
+    "منطقة جازان": (16.9, 42.6),
+    "منطقة نجران": (17.6, 44.4),
+    "منطقة عسير": (18.2, 42.5),
+    "منطقة الجوف": (29.97, 40.2),
+    "الحدود الشمالية": (30.0, 41.0),
+    "منطقة الباحة": (20.0, 41.45),
+    "منطقة الطائف": (21.27, 40.42),
 }
+
 def build_map_df(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty: return pd.DataFrame(columns=["label","lat","lon","count"])
     rows = []
-    city_col = "المدينة" if "المدينة" in df.columns else ("المدينه" if "المدينه" in df.columns else None)
-    if city_col:
-        for name, n in df[city_col].value_counts().items():
-            nm = str(name).strip()
-            if nm in CITY_LATLON:
-                lat, lon = CITY_LATLON[nm]
-                rows.append({"label": nm, "lat": lat, "lon": lon, "count": int(n)})
+    if "المدينه " in df.columns:
+        for name, n in df["المدينه "].value_counts().items():
+            name = str(name).strip()
+            if name in CITY_LATLON:
+                lat, lon = CITY_LATLON[name]
+                rows.append({"label": name, "lat": lat, "lon": lon, "count": int(n)})
     if not rows and "المنطقة" in df.columns:
         for name, n in df["المنطقة"].value_counts().items():
-            nm = str(name).strip()
-            if nm in REGION_LATLON:
-                lat, lon = REGION_LATLON[nm]
-                rows.append({"label": nm, "lat": lat, "lon": lon, "count": int(n)})
+            name = str(name).strip()
+            if name in REGION_LATLON:
+                lat, lon = REGION_LATLON[name]
+                rows.append({"label": name, "lat": lat, "lon": lon, "count": int(n)})
     return pd.DataFrame(rows)
 
 map_df = build_map_df(filtered)
 if not map_df.empty:
-    try:
-        # Try px.scatter_map if available (plotly >=5.21), fallback to px.scatter_mapbox
-        if hasattr(px, 'scatter_map'):
-            fig_map = px.scatter_map(
-                map_df, lat="lat", lon="lon", size="count", color="count",
-                hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
-                size_max=45, zoom=4.2, height=520, title="خريطة توزيع الاتصالات"
-            )
-        else:
-            fig_map = px.scatter_mapbox(
-                map_df, lat="lat", lon="lon", size="count", color="count",
-                hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
-                size_max=45, zoom=4.2, height=520, title="خريطة توزيع الاتصالات"
-            )
-        fig_map.update_layout(mapbox_style="carto-darkmatter", paper_bgcolor="rgba(0,0,0,0)",
-                              margin=dict(t=60,b=40,l=10,r=10), template="plotly_dark")
-        st.plotly_chart(fig_map, use_container_width=True)
-    except Exception as e:
-        st.warning(f"❗ تعذّر رسم الخريطة: {e}")
+    fig_map = px.scatter_mapbox(
+        map_df, lat="lat", lon="lon",
+        size="count", color="count",
+        hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
+        size_max=45, zoom=4.2, height=520,
+        title="خريطة توزيع الاتصالات"
+    )
+    fig_map.update_layout(
+        mapbox_style="carto-darkmatter",
+        paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=60,b=20,l=10,r=10),
+        template="plotly_dark"
+    )
+    st.plotly_chart(fig_map, use_container_width=True)
+    figures["الخريطة"] = fig_map
 else:
-    st.info("لا توجد إحداثيات مطابقة لأسماء المدن/المناطق ضمن المدى الحالي.")
+    st.info("لا تتوفر بيانات كافية لعرض الخريطة.")
+
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =============== Word Cloud — الخدمه المطلوبه ===============
