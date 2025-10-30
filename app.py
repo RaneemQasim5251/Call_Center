@@ -767,11 +767,6 @@ else:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# =============== Word Cloud — الخدمه المطلوبه ===============
-st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
-st.markdown("### ☁️ سحابة الكلمات — الخدمه المطلوبه")
-st.info("Word cloud is not available in this environment.")
-st.markdown('</div>', unsafe_allow_html=True)
 
 # =============== جدول التفاصيل + البحث ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
