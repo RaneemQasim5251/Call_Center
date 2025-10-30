@@ -1,11 +1,33 @@
+# --- Core UI / Viz ---
 streamlit==1.39.0
-pandas
-numpy
-plotly
-scikit-learn
-kaleido
-reportlab
-arabic-reshaper
-python-bidi
-python-pptx
-openpyxl
+plotly==5.24.1
+
+# --- Data handling (match your current env) ---
+pandas==2.3.3
+numpy==2.3.4
+openpyxl==3.1.5
+xlrd==2.0.1
+
+# --- ML (for the linear regression forecast) ---
+scikit-learn==1.5.2
+
+# --- Export images / PDF / PPTX ---
+kaleido==0.2.1
+reportlab==4.4.4
+python-pptx==1.0.2
+Pillow==10.4.0
+
+# --- Arabic shaping (RTL in PDF) ---
+arabic-reshaper==3.0.0
+python-bidi==0.6.7
+
+# --- Utilities ---
+requests==2.32.3
+
+# --- Postgres / PGVector (binary wheels for Windows + Py3.13) ---
+psycopg[binary]==3.2.12
+
+wordcloud==1.9.2
+
+matplotlib==3.8.2
+

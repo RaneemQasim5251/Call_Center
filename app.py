@@ -1,64 +1,42 @@
 # -*- coding: utf-8 -*-
-import os, glob, io, base64
+import os, glob, io, base64, re
 import numpy as np
 import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
 
-# ───────── optional deps/flags ─────────
+# ========== (إضافة جديدة) سكikit-learn اختياري للتنبؤ ==========
 _SK_OK = True
 try:
     from sklearn.linear_model import LinearRegression
 except Exception:
     _SK_OK = False
+# ============================================================
 
-_KALEIDO_OK = True
-try:
-    import kaleido  # noqa: F401
-except Exception:
-    _KALEIDO_OK = False
-
-_PDF_OK = True
-try:
-    from reportlab.lib.pagesizes import A4
-    from reportlab.pdfgen import canvas as pdf_canvas
-    from reportlab.lib.units import cm
-    from reportlab.lib.utils import ImageReader
-    from reportlab.pdfbase import pdfmetrics
-    from reportlab.pdfbase.ttfonts import TTFont
-except Exception:
-    _PDF_OK = False
-
-_AR_SHAPE_OK = True
+# WordCloud + Arabic support
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
+    AR_SUPPORT = True
 except Exception:
-    _AR_SHAPE_OK = False
+    AR_SUPPORT = False
 
-_PPTX_OK = True
-try:
-    from pptx import Presentation
-    from pptx.util import Inches, Pt
-    from pptx.enum.text import PP_ALIGN
-except Exception:
-    _PPTX_OK = False
-
-# ─── شعار من داخل مجلد المشروع (يعمل على أي استضافة) ───
+# =============== إعداد عام + شعار ===============
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
-LOGO_DIR = os.path.join(APP_DIR, "assets")          # folder
-LOGO_FILE_CANDIDATES = ["logo.png","logo.jpg","logo.jpeg","logo.svg"]
+ASSETS_DIR = os.path.join(APP_DIR, "assets")
+LOGO_DIR = ASSETS_DIR
+LOGO_FILE_CANDIDATES = ["Aljeri-logo.png.png","logo.jpg","logo.jpeg","logo.svg"]
 
 def read_logo_bytes():
-    # folder scan first
     if os.path.isdir(LOGO_DIR):
         for name in LOGO_FILE_CANDIDATES:
             p = os.path.join(LOGO_DIR, name)
             if os.path.isfile(p):
                 with open(p, "rb") as f:
                     return f.read()
-    # fallback: if user put a direct path in LOGO_DIR variable by mistake
     if os.path.isfile(LOGO_DIR):
         with open(LOGO_DIR, "rb") as f:
             return f.read()
@@ -66,45 +44,27 @@ def read_logo_bytes():
 
 logo_bytes = read_logo_bytes()
 
-# ───────── إعداد عام ─────────
 st.set_page_config(page_title="تقرير قسم خدمة العملاء 2025", page_icon="📞", layout="wide")
 
-# ───────── ثيم زجاجي + أحجام موحّدة للـKPI ─────────
 DARK_GLASS_CSS = """
 <style>
-:root{
-  --g1: linear-gradient(135deg, rgba(2,132,199,.22), rgba(14,165,233,.10));
-  --g2: linear-gradient(135deg, rgba(99,102,241,.22), rgba(14,165,233,.10));
-  --g3: linear-gradient(135deg, rgba(16,185,129,.22), rgba(14,165,233,.10));
-  --g4: linear-gradient(135deg, rgba(244,114,182,.22), rgba(14,165,233,.10));
-  --g5: linear-gradient(135deg, rgba(251,146,60,.22), rgba(14,165,233,.10));
-}
 html, body, [data-testid="stAppViewContainer"], .block-container { direction: rtl; }
 [data-testid="stAppViewContainer"] {
   background: radial-gradient(1200px 800px at 0% 0%, rgba(40,45,60,0.55) 0%, rgba(15,18,25,0.95) 60%),
               radial-gradient(1000px 700px at 100% 0%, rgba(30,35,50,0.55) 0%, rgba(15,18,25,0.95) 60%);
   backdrop-filter: blur(18px);
 }
-.block-container { padding-top: 2rem; }
+.block-container { padding-top: 1.2rem; max-width: 1400px; }
 .glass {
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.03)),
-    radial-gradient(120% 180% at 100% 0%, rgba(14,165,233,.08), rgba(255,255,255,0));
+  background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.03));
   border: 1px solid rgba(255,255,255,0.12);
   box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-  backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
-  border-radius: 18px; padding: 1.25rem 1.25rem;
+  backdrop-filter: blur(18px);
+  border-radius: 18px; padding: 1.1rem 1.2rem;
 }
 h1, h2, h3, h4, h5 { color: #ECF2FF !important; letter-spacing: .3px; }
 body, p, div, label, span { color: #E3E9F5 !important; }
-footer {visibility: hidden;}
-button[kind="primary"], .st-emotion-cache-7ym5gk, .st-emotion-cache-19rxjzo {
-  background: linear-gradient(135deg, #2b6cb0 0%, #0ea5e9 100%) !important;
-  color: white !important; border: none !important; border-radius: 12px !important;
-}
-
-/* Header / Logo (أكبر) */
-.header-flex { display:flex; align-items:center; justify-content:space-between; padding:1rem 1.25rem; margin-bottom:1rem; }
+.header-flex { display:flex; align-items:center; justify-content:space-between; padding:.8rem 1rem; margin-bottom:.6rem; }
 .header-left { display:flex; gap:.75rem; align-items:center; flex-direction:row-reverse; }
 .logo-box {
   width: 84px; height: 84px; border-radius: 18px; overflow:hidden;
@@ -113,44 +73,24 @@ button[kind="primary"], .st-emotion-cache-7ym5gk, .st-emotion-cache-19rxjzo {
   box-shadow:0 12px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
 }
 .logo-box img { width:100%; height:100%; object-fit:contain; }
-
-/* KPI موحّدة المقاس + تدرّج داخلي */
 .kpi {
-  position: relative; border-radius: 18px; padding: 1.1rem 1rem;
-  text-align: center; min-height: 165px;
+  position: relative; border-radius: 18px; padding: 1rem; text-align: center; min-height: 150px;
   display:flex; flex-direction:column; justify-content:center;
-  background:
-    linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03)),
-    radial-gradient(120% 180% at 0% 0%, rgba(255,255,255,0.06), rgba(255,255,255,0));
+  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
   border: 1px solid rgba(255,255,255,0.14);
   box-shadow: 0 18px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05);
 }
-.kpi:before {
-  content: ""; position: absolute; inset: 0; border-radius: 18px; padding: 1px;
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor; mask-composite: exclude;
-}
-.kpi.i1:before{background: var(--g1);}
-.kpi.i2:before{background: var(--g2);}
-.kpi.i3:before{background: var(--g3);}
-.kpi.i4:before{background: var(--g4);}
-.kpi.i5:before{background: var(--g5);}
-.kpi .title { color: #9FB3C8; font-size: .95rem; margin-bottom: .35rem; }
-.kpi .value { font-size: 2rem; font-weight: 800; color: #F5FAFF; line-height: 1.15; text-shadow: 0 10px 25px rgba(0,0,0,0.45); }
-.kpi .delta-pos { color: #30e3a8; font-weight: 700; }
-.kpi .delta-neg { color: #ff7b7b; font-weight: 700; }
+.kpi .title { color:#9FB3C8; font-size:.95rem; margin-bottom:.35rem; }
+.kpi .value { font-size:2rem; font-weight:800; color:#F5FAFF; line-height:1.15; }
 .badge {
-  display: inline-block; padding: .25rem .55rem; border-radius: 999px; font-size: .85rem;
+  display:inline-block; padding:.25rem .55rem; border-radius:999px; font-size:.85rem;
   background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); color: #cfe4ff;
 }
-
-/* نزّل زر التطبيق شوي */
-div[data-testid="stForm"] .stButton button { margin-top: 1.85rem; }
+hr { border:none; height:1px; background:rgba(255,255,255,0.12); margin:12px 0; }
 </style>
 """
 st.markdown(DARK_GLASS_CSS, unsafe_allow_html=True)
 
-# Header with logo
 if logo_bytes:
     b64 = base64.b64encode(logo_bytes).decode("utf-8")
     logo_img_html = f'<div class="logo-box"><img src="data:image/png;base64,{b64}" alt="logo"/></div>'
@@ -163,9 +103,7 @@ st.markdown(
       <div class="header-left">
         <div>
           <h2 style="margin:0;">تقرير قسم خدمة العملاء 2025</h2>
-          <div style="color:#9FB3C8;margin-top:-4px;font-size:0.95rem;">
-            عرض تفاعلي للمؤشرات والرسوم والتنبؤ الذكي
-          </div>
+          <div style="color:#9FB3C8;margin-top:-4px;font-size:.95rem;">عرض تفاعلي للمؤشرات والرسوم والخريطة</div>
         </div>
       </div>
       {logo_img_html}
@@ -174,325 +112,620 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# ───────── تحميل/تحضير البيانات ─────────
-@st.cache_data(show_spinner=True)
-def load_and_prepare_data():
-    files = glob.glob(os.path.join("data", "*.xlsx"))
-    all_dfs = []
-    for file in files:
+# =============== إعداد الشهور وترجَمات الأسماء ===============
+MONTH_ORDER = ["Aug", "Sep", "Oct"]  # المعتمدة الآن
+MONTH_INDEX = {m:i for i,m in enumerate(MONTH_ORDER)}
+MONTH_MAP = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+INV_MONTH_MAP = {v:k for k,v in MONTH_MAP.items()}
+
+PROVIDER_AR = {
+    "Aljauhara": "الجوهرة",
+    "Reem": "ريم",
+    "Ahad": "عهد",
+    "Shouq": "شوق",
+    "Abdulmageed": "عبدالمجيد",
+    "Abdulkareem": "عبدالكريم",
+}
+def provider_to_ar(name: str) -> str:
+    return PROVIDER_AR.get(name, name)
+
+def ar_to_provider(ar_name: str) -> str:
+    rev = {v:k for k,v in PROVIDER_AR.items()}
+    return rev.get(ar_name, ar_name)
+
+# --- توحيد قيم الشهر (Oct/October/أكتوبر… -> Oct) ---
+MONTH_SYNONYMS = {
+    "aug": "Aug", "aug.": "Aug", "august": "Aug", "أغسطس": "Aug", "اغسطس": "Aug",
+    "sep": "Sep", "sep.": "Sep", "september": "Sep", "سبتمبر": "Sep",
+    "oct": "Oct", "oct.": "Oct", "october": "Oct", "أكتوبر": "Oct", "اكتوبر": "Oct",
+}
+def normalize_month_value(val, dt):
+    s = (str(val).strip() if val is not None else "").lower()
+    if s in MONTH_SYNONYMS:
+        canon = MONTH_SYNONYMS[s]
+        return canon if canon in MONTH_ORDER else np.nan
+    if pd.notna(dt):
+        mnum = int(dt.month); canon = INV_MONTH_MAP.get(mnum)
+        return canon if canon in MONTH_ORDER else np.nan
+    if len(s) >= 3 and s[:3].title() in MONTH_MAP:
+        canon = s[:3].title()
+        return canon if canon in MONTH_ORDER else np.nan
+    return np.nan
+
+# =============== توحيد الأعمدة ===============
+def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df is None or df.empty:
+        return df
+    df = df.rename(columns=lambda c: str(c).strip())
+    mapping = {
+        "التاريخ ": "التاريخ",
+        "Date": "التاريخ", "date": "التاريخ",
+        "المنطقه": "المنطقة",
+        "المدينه ": "المدينة", "المدينه": "المدينة",
+        "الخدمة المطلوبة": "الخدمه المطلوبه",
+        "نوع الخدمه": "نوع الخدمة",
+        "اسم العميل ": "اسم العميل",
+        "رقم الجوال ": "رقم الجوال",
+    }
+    df = df.rename(columns={c: mapping.get(c, c) for c in df.columns})
+    return df
+
+# =============== بناء التاريخ من (الشهر + اليوم) ===============
+def build_date_from_month_day(row: pd.Series):
+    m = str(row.get("الشهر","")).strip()
+    raw = str(row.get("التاريخ","")).strip()
+    if raw and ("/" in raw or "-" in raw):
+        dt = pd.to_datetime(raw, dayfirst=True, errors="coerce")
+        if pd.notna(dt): return dt
+    if m in MONTH_MAP:
         try:
-            df = pd.read_excel(file, sheet_name="الرئيسة", header=11)
-        except Exception as e:
-            st.error(f"تعذّر قراءة الملف: {os.path.basename(file)} — {e}")
+            day = int(float(raw)) if raw else 1
+            return pd.Timestamp(year=2025, month=MONTH_MAP[m], day=day)
+        except Exception:
+            return pd.NaT
+    return pd.NaT
+
+# =============== أسابيع الأحد→الخميس وترقيمها داخل الشهر ===============
+def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or "التاريخ/Date" not in df.columns:
+        df["ISO_Year"]=np.nan; df["ISO_Week"]=np.nan
+        df["WeekStart"]=pd.NaT; df["WeekEnd"]=pd.NaT
+        df["رقم الأسبوع"]=np.nan; df["وسم الأسبوع"]=""
+        return df
+
+    d = df.copy()
+    wd = d["التاريخ/Date"].dt.weekday              # Monday=0..Sunday=6
+    start_offset = (wd + 1) % 7                     # للأحد
+    d["WeekStart"] = d["التاريخ/Date"] - pd.to_timedelta(start_offset, unit="D")
+    d["WeekEnd"]   = d["WeekStart"] + pd.to_timedelta(4, unit="D")  # الخميس
+
+    d["ISO_Year"]  = d["WeekStart"].dt.isocalendar().year
+    d["ISO_Week"]  = d["WeekStart"].dt.isocalendar().week
+
+    if "الشهر" in d.columns:
+        def rank_weeks_in_month(g):
+            mnum = MONTH_MAP.get(g.name, None)
+            if not mnum:
+                gg=g.copy(); gg["رقم الأسبوع"]=np.nan; gg["وسم الأسبوع"]=""
+                return gg
+
+            year = 2025
+            month_start = pd.Timestamp(year=year, month=mnum, day=1)
+            next_month = mnum + 1 if mnum < 12 else 1
+            next_year  = year + 1 if mnum == 12 else year
+            month_end  = pd.Timestamp(year=next_year, month=next_month, day=1) - pd.Timedelta(days=1)
+
+            weeks = (
+                g.dropna(subset=["WeekStart","WeekEnd"])
+                 .loc[
+                  ((g["WeekStart"]>=month_start)&(g["WeekStart"]<=month_end)) |
+                  ((g["WeekEnd"]  >=month_start)&(g["WeekEnd"]  <=month_end))
+                 , ["WeekStart","WeekEnd"]]
+                 .drop_duplicates()
+                 .sort_values("WeekStart")
+                 .reset_index(drop=True)
+            )
+            weeks["rank"] = range(1, len(weeks)+1)
+            rank_map = {ws:int(r) for ws,r in zip(weeks["WeekStart"], weeks["rank"])}
+
+            def label(ws,we):
+                if pd.isna(ws) or pd.isna(we): return ""
+                r = rank_map.get(ws, np.nan)
+                return f"الأسبوع {r} ({ws.strftime('%b %d')}–{we.strftime('%b %d')})"
+
+            gg = g.copy()
+            gg["رقم الأسبوع"] = gg["WeekStart"].map(rank_map).astype("float")
+            gg["وسم الأسبوع"] = [label(ws,we) for ws,we in zip(gg["WeekStart"], gg["WeekEnd"])]
+            return gg
+
+        d = d.groupby("الشهر", group_keys=False).apply(rank_weeks_in_month)
+    else:
+        d["رقم الأسبوع"]=np.nan; d["وسم الأسبوع"]=""
+
+    return d
+
+# =============== تحميل كل CSV مع معالجة الأخطاء ===============
+@st.cache_data(show_spinner=True)
+def load_all(folder="data"):
+    files = sorted(glob.glob(os.path.join(folder, "*.csv")))
+    datasets = {}
+    for path in files:
+        provider = os.path.splitext(os.path.basename(path))[0].strip()
+
+        df = None
+        err_msg = None
+        for attempt in range(2):
+            try:
+                df = pd.read_csv(
+                    path,
+                    encoding="utf-8-sig",
+                    engine="python",
+                    on_bad_lines="skip",
+                    sep=",",
+                    quotechar='"',
+                    skipinitialspace=True
+                )
+                break
+            except Exception as e:
+                err_msg = str(e)
+
+        if df is None:
+            st.error(f"تعذّر قراءة {os.path.basename(path)} — {err_msg}")
             continue
+
+        if df.empty:
+            st.warning(f"الملف {os.path.basename(path)} فارغ بعد التنظيف.")
+            continue
+
+        # نظافة أساسية
         df.dropna(how="all", inplace=True)
-        agent_name = os.path.basename(file).split("-")[0].strip()
-        df["مقدم الخدمة (ملف)"] = agent_name
-        all_dfs.append(df)
-    if not all_dfs:
-        return pd.DataFrame()
-    data = pd.concat(all_dfs, ignore_index=True)
+        df = normalize_columns(df)
 
-    for col in ["اسم العميل ","رقم الجوال ","المنطقة","المدينه ","الشركة","مقدم الخدمة","نوع الخدمة","الخدمه المطلوبه","الملاحظات","الشهر"]:
-        if col in data.columns:
-            data[col] = data[col].astype(str).str.strip()
+        # تاريخ موحّد
+        df["التاريخ/Date"] = pd.to_datetime(df.apply(build_date_from_month_day, axis=1), errors="coerce")
 
-    if "المنطقة" in data.columns:
-        data["المنطقة"].replace({"المنطقه الشرقيه": "المنطقة الشرقية"}, inplace=True)
-    if "نوع الخدمة" in data.columns:
-        data["نوع الخدمة"].replace({"nan": None}, inplace=True)
-        data["نوع الخدمة"] = data["نوع الخدمة"].astype(str).str.strip()
+        # --- الشهر: توحيد قوي قبل الحصر ---
+        orig_month_col = df["الشهر"] if "الشهر" in df.columns else pd.Series([None]*len(df))
+        df["الشهر"] = [normalize_month_value(m, dt) for m, dt in zip(orig_month_col, df["التاريخ/Date"])]
+        df["الشهر"] = df["الشهر"].where(df["الشهر"].isin(MONTH_ORDER), np.nan)
 
-    # إزالة أرقام تجريبية إن وجدت
-    if ("مقدم الخدمة (ملف)" in data.columns) and ("رقم الجوال " in data.columns):
-        dummy_phones = [str(num) for num in range(599940931, 599940953)]
-        data = data[~((data["مقدم الخدمة (ملف)"] == "Shouq") &
-                      (data["رقم الجوال "].astype(str).isin(dummy_phones)))]
+        # توحيد النصوص
+        for col in ["اسم العميل","رقم الجوال","المنطقة","المدينة","الشركة","نوع الخدمة","الخدمه المطلوبه","الشهر"]:
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip()
 
-    def parse_date(row):
-        month_name = str(row.get("الشهر", "")).strip()
-        day_val = str(row.get("التاريخ ", "")).strip()
-        if not day_val or day_val.lower() == "nan":
-            return None
-        if "/" in day_val:
-            return pd.to_datetime(day_val, dayfirst=True, errors="coerce")
-        elif day_val.replace(".", "").isdigit():
-            day = int(float(day_val))
-            month_map = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
-                         "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
-            m = month_map.get(month_name)
-            if m:
-                try:
-                    return pd.Timestamp(year=2025, month=m, day=day)
-                except:
-                    return None
-        return None
+        # بناء أسابيع العمل
+        df = add_week_columns(df)
 
-    data["التاريخ/Date"] = data.apply(parse_date, axis=1)
-    return data
+        # مصدر الملف
+        df["مقدم الخدمة (ملف)"] = provider
+        datasets[provider] = df
 
-data = load_and_prepare_data()
-if data.empty:
-    st.error("لم يتم تحميل أي بيانات. تأكدي من وجود ملفات Excel داخل مجلد data/")
+        if err_msg is not None:
+            st.warning(f"تم تخطّي أسطر تالفة في {os.path.basename(path)} للحفاظ على عمل التطبيق.")
+
+    if datasets:
+        all_df = pd.concat(list(datasets.values()), ignore_index=True, sort=False)
+        datasets["__ALL__"] = all_df
+
+    return datasets
+
+datasets = load_all()
+if not datasets:
+    st.error("لا يوجد أي CSV داخل data/. أضيفي الملفات ثم أعيدي التحميل.")
     st.stop()
 
-MONTH_ORDER = ["Aug","Sep","Oct","Nov","Dec","Jan","Feb","Mar","Apr","May","Jun","Jul"]
-MONTH_INDEX = {m:i for i,m in enumerate(MONTH_ORDER)}
-# ——— توقع الشهر القادم (يُستخدم في بطاقة KPI والرسم لاحقًا) ———
-def calc_forecast(df: pd.DataFrame):
-    if "الشهر" not in df.columns or df.empty:
-        return None, None, None
-    month_totals = df["الشهر"].value_counts().reindex(MONTH_ORDER).dropna()
-    if len(month_totals) < 1:
-        return None, None, None
+# =============== المرشّحات ===============
+providers = [k for k in datasets.keys() if k != "__ALL__"]
+providers_ar = ["الكل"] + [provider_to_ar(p) for p in providers]
 
-    mt_index = np.array([MONTH_INDEX[m] for m in month_totals.index]).reshape(-1,1)
-    mt_values = month_totals.values.astype(float)
+with st.form("main_filters"):
+    c1, c2, c3 = st.columns([1.2, 1.2, 1.2])
 
-    if _SK_OK and len(mt_values) >= 2:
-        model = LinearRegression().fit(mt_index, mt_values)
-        next_x = np.array([[mt_index[-1][0] + 1]])
-        pred_next = float(model.predict(next_x)[0])
-        resid = mt_values - model.predict(mt_index)
-        sigma = float(np.std(resid)) if len(resid) > 1 else 0.0
-        ci_low = max(0.0, pred_next - 1.96*sigma)
-        ci_high = pred_next + 1.96*sigma
-        return int(round(pred_next)), int(round(ci_low)), int(round(ci_high))
-
-    if len(mt_values) >= 2:
-        growth = mt_values[-1] - mt_values[-2]
-        pred_next = int(round(mt_values[-1] + growth))
-        return pred_next, None, None
-
-    return None, None, None
-
-# ───────── المرشّحات ─────────
-with st.form("filters_form"):
-    colf1, colf2, colf3 = st.columns([1.4,1.4,0.9])
-    with colf1:
-        st.markdown('<div class="glass"><h4 style="margin-top:0;">تصفية حسب الشهر</h4>', unsafe_allow_html=True)
-        months_available = sorted(data["الشهر"].dropna().unique().tolist(), key=lambda x: MONTH_INDEX.get(x, 999))
-        month_choice = st.selectbox("اختر الشهر", ["الكل"] + months_available, index=0)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with colf2:
-        st.markdown('<div class="glass"><h4 style="margin-top:0;">تصفية حسب مقدم الخدمة</h4>', unsafe_allow_html=True)
-        agents_col = "مقدم الخدمة" if "مقدم الخدمة" in data.columns else ("مقدم الخدمة (ملف)" if "مقدم الخدمة (ملف)" in data.columns else None)
-        agents_list = sorted(data[agents_col].dropna().unique().tolist()) if agents_col else []
-        agent_choice = st.selectbox("اختر مقدم الخدمة", ["الكل"] + agents_list, index=0)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with colf3:
-        st.markdown('<div class="glass"><h4 style="margin-top:0;">تطبيق</h4>', unsafe_allow_html=True)
-        st.form_submit_button("تطبيق المرشّحات")
+    with c1:
+        st.markdown('<div class="glass"><b>مقدّم الخدمة</b>', unsafe_allow_html=True)
+        provider_choice_ar = st.selectbox("اختر", providers_ar, index=0)
         st.markdown('</div>', unsafe_allow_html=True)
 
-month_final = month_choice if month_choice != "الكل" else None
-agent_final = agent_choice if agent_choice != "الكل" else None
+    # نطاق البيانات حسب مقدم الخدمة
+    if provider_choice_ar == "الكل":
+        provider_key = "__ALL__"
+        df_scope = datasets["__ALL__"].copy()
+    else:
+        provider_key = ar_to_provider(provider_choice_ar)
+        df_scope = datasets.get(provider_key, pd.DataFrame()).copy()
 
-filtered = data.copy()
-if month_final:
-    filtered = filtered[filtered["الشهر"] == month_final]
-if agent_final and agents_col:
-    filtered = filtered[filtered[agents_col] == agent_final]
+    with c2:
+        st.markdown('<div class="glass"><b>تصفية حسب الشهر</b>', unsafe_allow_html=True)
+        months_av = []
+        if "الشهر" in df_scope.columns:
+            months_av = [m for m in MONTH_ORDER if m in df_scope["الشهر"].dropna().unique().tolist()]
+        month_choice = st.selectbox("اختر الشهر", ["الكل"] + months_av, index=0)
+        st.markdown('</div>', unsafe_allow_html=True)
 
-# ───────── مؤشرات KPI ─────────
-pred_next, pred_ci_low, pred_ci_high = calc_forecast(data)
-SERVICE_TYPES = ["استفسار","طلب خدمة","عرض استثماري","طلب تواصل مع أحد منسوبي الشركة","شكوى"]
-type_counts = (filtered["نوع الخدمة"].value_counts() if "نوع الخدمة" in filtered.columns else pd.Series(dtype=int))
-get_count = lambda k: int(type_counts.get(k, 0))
+    with c3:
+        st.markdown('<div class="glass"><b>تصفية حسب الأسبوع داخل الشهر</b>', unsafe_allow_html=True)
+        # الأسبوع يظهر دائمًا: نجمع أسابيع نطاق df_scope ثم نقيّد إذا تم اختيار شهر
+        week_options = ["الكل"]
+        tmp = df_scope.copy()
+        if month_choice != "الكل":
+            tmp = tmp[tmp["الشهر"] == month_choice]
+        if "وسم الأسبوع" in tmp.columns and not tmp.empty:
+            uniq = (
+                tmp.dropna(subset=["WeekStart","WeekEnd"])
+                   .drop_duplicates(subset=["WeekStart"])
+                   .sort_values(["WeekStart"])
+            )
+            week_options += uniq["وسم الأسبوع"].tolist()
+        week_choice = st.selectbox("اختر الأسبوع", week_options, index=0)
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    st.form_submit_button("تطبيق المرشّحات ✅")
+
+# =============== تطبيق التصفية ===============
+filtered = df_scope.copy()
+if month_choice != "الكل":
+    filtered = filtered[filtered["الشهر"] == month_choice]
+if week_choice != "الكل" and "وسم الأسبوع" in filtered.columns:
+    filtered = filtered[filtered["وسم الأسبوع"] == week_choice]
+
+# =============== KPI + المتوسطات الديناميكية ===============
 total_calls = int(len(filtered))
 
-def compute_delta():
-    if "الشهر" not in data.columns: return None
-    if month_final:
-        curr_month = month_final
-    else:
-        months_present = [m for m in MONTH_ORDER if m in set(filtered["الشهر"].dropna().unique())] if "الشهر" in filtered.columns else []
-        if not months_present: return None
-        curr_month = months_present[-1]
-    curr_idx = MONTH_INDEX.get(curr_month, None)
-    if curr_idx is None or curr_idx - 1 < 0: return None
-    prev_month = MONTH_ORDER[curr_idx - 1]
-    curr_df = data[data["الشهر"] == curr_month]
-    prev_df = data[data["الشهر"] == prev_month]
-    if agents_col and agent_final:
-        curr_df = curr_df[curr_df[agents_col] == agent_final]
-        prev_df = prev_df[prev_df[agents_col] == agent_final]
-    if curr_df.empty or prev_df.empty: return None
-    return int(len(curr_df) - len(prev_df))
-
-kpi_delta = compute_delta()
-
-def top_month_overall():
-    if "الشهر" not in data.columns: return None, 0
-    df = data.copy()
-    if agents_col and agent_final:
-        df = df[df[agents_col] == agent_final]
-    if df.empty: return None, 0
+def top_month_in_scope(df):
+    if df.empty or "الشهر" not in df.columns: return None, 0
     s = df["الشهر"].value_counts().sort_values(ascending=False)
     return (s.index[0], int(s.iloc[0])) if len(s) else (None, 0)
 
-def avg_monthly_overall():
-    if "الشهر" not in data.columns: return 0.0
-    df = data.copy()
-    if agents_col and agent_final:
-        df = df[df[agents_col] == agent_final]
-    if df.empty: return 0.0
-    month_tot = df["الشهر"].value_counts()
-    return float(month_tot.mean()) if len(month_tot) else 0.0
+def average_for_selection(df: pd.DataFrame, month_choice: str, week_choice: str):
+    """
+    - إذا تم اختيار أسبوع: متوسط المكالمات اليومي (أحد–خميس).
+    - إذا تم اختيار شهر فقط: متوسط المكالمات الأسبوعي داخل هذا الشهر.
+    - إذا لم يُحدَّد شهر/أسبوع: متوسط المكالمات الشهري على النطاق الحالي.
+    """
+    if df.empty: return 0.0, "—"
 
-st.markdown('<div class="glass" style="margin-top:.5rem;">', unsafe_allow_html=True)
-st.markdown("### المؤشرات الرئيسية")
+    if week_choice != "الكل":
+        if "WeekStart" not in df.columns or "WeekEnd" not in df.columns:
+            return 0.0, "—"
+        wdf = df[df["وسم الأسبوع"] == week_choice].copy()
+        if wdf.empty:
+            return 0.0, "—"
+        ws = pd.to_datetime(wdf["WeekStart"].iloc[0])
+        we = pd.to_datetime(wdf["WeekEnd"].iloc[0])
+        day_count = max(1, min(int((we - ws).days) + 1, 5))  # أحد..خميس
+        avg_per_day = len(wdf) / day_count
+        return float(avg_per_day), f"متوسط المكالمات اليومي — {ws.strftime('%b %d')}–{we.strftime('%b %d')}"
 
-# أربعة مؤشرات علوية بنفس المقاس (إجمالي - أعلى شهر - متوسط الشهور - توقع الشهر القادم)
-k1,k2,k3,k4 = st.columns([1,1,1,1])
+    if month_choice != "الكل":
+        if "WeekStart" not in df.columns:
+            return 0.0, "—"
+        mdf = df[df["الشهر"] == month_choice]
+        if mdf.empty:
+            return 0.0, "—"
+        week_sizes = mdf.groupby("WeekStart").size()
+        if len(week_sizes) == 0:
+            return 0.0, "—"
+        return float(week_sizes.mean()), f"متوسط المكالمات الأسبوعي — شهر {month_choice}"
 
+    if "الشهر" in df.columns:
+        month_sizes = df.groupby("الشهر").size()
+        if len(month_sizes)==0: return 0.0, "—"
+        return float(month_sizes.mean()), "متوسط المكالمات الشهري — النطاق الحالي"
+
+    return 0.0, "—"
+
+k1,k2,k3 = st.columns(3)
 with k1:
-    delta_html = ""
-    helper_html = ""
-    if kpi_delta is not None:
-        cls = "delta-pos" if kpi_delta>0 else ("delta-neg" if kpi_delta<0 else "")
-        sign = "+" if kpi_delta>0 else ("" if kpi_delta==0 else "")
-        delta_html = f'<div class="{cls}" style="margin-top:.3rem;">{sign}{kpi_delta}</div>'
-        helper_html = '<div style="margin-top:.35rem;color:#9FB3C8;font-size:.9rem;">مقارنةً بالشهر السابق ضمن نفس النطاق</div>'
-    else:
-        helper_html = '<div class="badge" style="margin-top:.35rem;">لا يوجد شهر سابق للمقارنة</div>'
-    st.markdown(f"""<div class="kpi i1">
-      <div class="title">إجمالي الاتصالات</div>
-      <div class="value">{total_calls}</div>
-      {delta_html}
-      {helper_html}
+    scope_title = "جميع الملفات" if provider_key=="__ALL__" else f"الملف: {provider_to_ar(provider_key)}"
+    st.markdown(f"""<div class="kpi">
+        <div class="title">إجمالي الاتصالات — {scope_title}</div>
+        <div class="value">{total_calls}</div>
     </div>""", unsafe_allow_html=True)
 
-top_m, top_m_n = top_month_overall()
+m_name, m_val = top_month_in_scope(filtered if provider_key=="__ALL__" else datasets[provider_key])
 with k2:
-    st.markdown(f"""<div class="kpi i2">
-      <div class="title">أعلى شهر</div>
-      <div class="value">{top_m or 'غير متاح'}</div>
-      <div style="margin-top:.35rem;color:#9FB3C8;font-size:.95rem;">عدد الاتصالات: {int(top_m_n)}</div>
+    st.markdown(f"""<div class="kpi">
+        <div class="title">أعلى شهر ضمن النطاق</div>
+        <div class="value">{m_name or '—'}</div>
+        <div class="badge">عدد: {m_val}</div>
     </div>""", unsafe_allow_html=True)
 
-avg_all = avg_monthly_overall()
+avg_val, avg_label = average_for_selection(filtered, month_choice, week_choice)
 with k3:
-    st.markdown(f"""<div class="kpi i3">
-      <div class="title">متوسط الشهور</div>
-      <div class="value">{round(avg_all,1)}</div>
-      <div style="margin-top:.35rem;color:#9FB3C8;font-size:.95rem;">متوسط الاتصالات شهريًا على كامل الفترة</div>
+    st.markdown(f"""<div class="kpi">
+        <div class="title">المتوسط (حسب التصفية)</div>
+        <div class="value">{round(avg_val,2)}</div>
+        <div class="badge">{avg_label}</div>
     </div>""", unsafe_allow_html=True)
 
-# بطاقة «توقّع الشهر القادم» ثابتة دائمًا
-predicted_number = None
-ci_low = ci_high = None
+# =============== (إضافة جديدة) KPI لتوقّع الشهر القادم ===============
+def calc_forecast(df_month_scope: pd.DataFrame):
+    """
+    يبني إجمالي شهري من df_month_scope (قبل ترشيح الأسبوع)،
+    ثم يطبّق LinearRegression إن توفرت، أو تقدير بسيط إن لم تتوفر.
+    """
+    if df_month_scope is None or df_month_scope.empty or "الشهر" not in df_month_scope.columns:
+        return None, None, None
 
-with k4:
+    month_totals = df_month_scope["الشهر"].value_counts().reindex(MONTH_ORDER).dropna()
+    if len(month_totals) < 1:
+        return None, None, None
+
+    x = np.array([MONTH_INDEX[m] for m in month_totals.index]).reshape(-1,1)
+    y = month_totals.values.astype(float)
+
+    # نموذج خطي مع نطاق تقريبي
+    if _SK_OK and len(y) >= 2:
+        model = LinearRegression().fit(x, y)
+        next_x_val = x[-1][0] + 1
+        pred = float(model.predict(np.array([[next_x_val]]) )[0])
+        resid = y - model.predict(x)
+        sigma = float(np.std(resid)) if len(resid) > 1 else 0.0
+        ci_low = max(0.0, pred - 1.96*sigma)
+        ci_high = pred + 1.96*sigma
+        return int(round(pred)), int(round(ci_low)), int(round(ci_high))
+
+    # تقدير مبسّط
+    if len(y) >= 2:
+        growth = y[-1] - y[-2]
+        pred = int(round(y[-1] + growth))
+        return pred, None, None
+
+    return None, None, None
+
+# نحسب التنبؤ على نطاق مقدّم الخدمة المختار (بدون تقييد الأسبوع؛ مع بقاء تقييد الشهر = الكل لكي يكون شهري شامل)
+df_for_forecast = df_scope.copy()
+pred_next, pred_ci_low, pred_ci_high = calc_forecast(df_for_forecast)
+
+# بطاقة KPI للتنبؤ (سطر مستقل مباشرة بعد الـKPI الحالية)
+c_pred = st.columns(1)[0]
+with c_pred:
     if pred_next is not None:
-        ci_html = ""
-        if pred_ci_low is not None and pred_ci_high is not None:
-            ci_html = f'<div class="badge" style="margin-top:.35rem;">نطاق تقريبي: {pred_ci_low} – {pred_ci_high}</div>'
-        st.markdown(f"""<div class="kpi i4">
-          <div class="title">توقّع الشهر القادم</div>
-          <div class="value">{pred_next}</div>
-          {ci_html}
+        ci_html = f'<div class="badge" style="margin-top:.35rem;">نطاق تقريبي: {pred_ci_low} – {pred_ci_high}</div>' if (pred_ci_low is not None and pred_ci_high is not None) else ""
+        st.markdown(f"""<div class="kpi" style="margin-top:.5rem;">
+            <div class="title">توقّع الشهر القادم (حسب نطاق مقدّم الخدمة المختار)</div>
+            <div class="value">{pred_next}</div>
+            {ci_html}
         </div>""", unsafe_allow_html=True)
     else:
-        st.markdown(f"""<div class="kpi i4">
-          <div class="title">توقّع الشهر القادم</div>
-          <div class="value">—</div>
-          <div class="badge" style="margin-top:.35rem;">البيانات غير كافية</div>
+        st.markdown(f"""<div class="kpi" style="margin-top:.5rem;">
+            <div class="title">توقّع الشهر القادم</div>
+            <div class="value">—</div>
+            <div class="badge" style="margin-top:.35rem;">البيانات غير كافية</div>
         </div>""", unsafe_allow_html=True)
 
+st.markdown("<hr>", unsafe_allow_html=True)
 
-st.markdown("<div style='height:.5rem;'></div>", unsafe_allow_html=True)
-
-# خمس بطاقات أنواع الخدمات بنفس المقاس
-kk1,kk2,kk3,kk4,kk5 = st.columns(5)
-for (title, val, cls, col) in [
-    ("الاستفسارات", get_count('استفسار'), "i1", kk1),
-    ("طلبات الخدمة", get_count('طلب خدمة'), "i2", kk2),
-    ("العروض الاستثمارية", get_count('عرض استثماري'), "i3", kk3),
-    ("طلبات التواصل", get_count('طلب تواصل مع أحد منسوبي الشركة'), "i4", kk4),
-    ("الشكاوى", get_count('شكوى'), "i5", kk5),
-]:
-    with col:
-        st.markdown(f"""<div class="kpi {cls}">
-          <div class="title">{title}</div><div class="value">{val}</div>
-        </div>""", unsafe_allow_html=True)
-st.markdown('</div>', unsafe_allow_html=True)
-
-# ───────── الرسوم ─────────
-figures = {}
-st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
-st.markdown("### الرسوم التفاعلية")
-c1,c2 = st.columns(2)
+# =============== الرسوم ===============
+st.markdown('<div class="glass">', unsafe_allow_html=True)
+st.markdown("### الرسوم")
+c1, c2 = st.columns(2)
 with c1:
     if "المنطقة" in filtered.columns and not filtered.empty:
         reg_counts = filtered["المنطقة"].value_counts().reset_index()
         reg_counts.columns = ["المنطقة","العدد"]
         fig_reg = px.bar(reg_counts, x="المنطقة", y="العدد", title="توزيع الاتصالات حسب المنطقة", text="العدد")
         fig_reg.update_traces(textposition="outside")
-        fig_reg.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                              plot_bgcolor="rgba(255,255,255,0.02)", margin=dict(t=60,b=40,l=20,r=20))
+        fig_reg.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
         st.plotly_chart(fig_reg, use_container_width=True)
-        figures["توزيع الاتصالات حسب المنطقة"] = fig_reg
     else:
-        st.info("لا تتوفر بيانات مناطق للمدى المحدد.")
+        st.info("لا تتوفر بيانات مناطق ضمن النطاق المحدد.")
 with c2:
     if "نوع الخدمة" in filtered.columns and not filtered.empty:
         tcounts = filtered["نوع الخدمة"].value_counts()
         fig_type = px.pie(names=tcounts.index, values=tcounts.values, title="نسبة أنواع الاتصالات", hole=0.35)
         fig_type.update_traces(textposition="inside", textinfo="percent+label")
-        fig_type.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                               plot_bgcolor="rgba(255,255,255,0.02)", margin=dict(t=60,b=40,l=20,r=20))
+        fig_type.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
         st.plotly_chart(fig_type, use_container_width=True)
-        figures["نسبة أنواع الاتصالات"] = fig_type
     else:
-        st.info("لا تتوفر بيانات لأنواع الاتصالات للمدى المحدد.")
+        st.info("لا تتوفر بيانات لأنواع الاتصالات ضمن النطاق المحدد.")
 if "الشركة" in filtered.columns and not filtered.empty:
     comp_counts = filtered["الشركة"].value_counts().reset_index()
     comp_counts.columns = ["الشركة","العدد"]
     fig_comp = px.bar(comp_counts, x="الشركة", y="العدد", title="عدد الاتصالات حسب الشركة", text="العدد")
     fig_comp.update_traces(textposition="outside")
-    fig_comp.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                           plot_bgcolor="rgba(255,255,255,0.02)", margin=dict(t=60,b=40,l=20,r=20))
+    fig_comp.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
     st.plotly_chart(fig_comp, use_container_width=True)
-    figures["عدد الاتصالات حسب الشركة"] = fig_comp
-else:
-    st.info("لا تتوفر بيانات للشركات للمدى المحدد.")
-
-st.markdown("### توزيع الاتصالات حسب مقدّم الخدمة (على مستوى الشهر الحالي فقط)")
-if "الشهر" in data.columns and agents_col:
-    if month_final:
-        agent_scope_df = data[data["الشهر"] == month_final].copy()
-    else:
-        months_present = [m for m in MONTH_ORDER if m in set(data["الشهر"].dropna().unique())]
-        agent_scope_df = data[data["الشهر"] == months_present[-1]].copy() if months_present else pd.DataFrame()
-    if not agent_scope_df.empty:
-        agent_counts = agent_scope_df[agents_col].value_counts()
-        fig_agents = px.pie(names=agent_counts.index, values=agent_counts.values, hole=0.3,
-                            title="نسبة الاتصالات حسب مقدّم الخدمة")
-        fig_agents.update_traces(textposition="inside", textinfo="percent+label")
-        fig_agents.update_layout(template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                                 plot_bgcolor="rgba(255,255,255,0.02)", margin=dict(t=60,b=40,l=20,r=20))
-        st.plotly_chart(fig_agents, use_container_width=True)
-        figures["نسبة الاتصالات حسب مقدّم الخدمة"] = fig_agents
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ───────── خريطة ─────────
+# =============== توزيع الاتصالات حسب مقدّم الخدمة (3 Pies) ===============
+st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
+st.markdown("### نسبة الاتصالات حسب مقدّم الخدمة")
+
+agent_col = "مقدم الخدمة (ملف)" if "مقدم الخدمة (ملف)" in df_scope.columns else ("مقدم الخدمة" if "مقدم الخدمة" in df_scope.columns else None)
+
+if agent_col:
+    col_total, col_oct, col_week = st.columns(3)
+
+    # --- 1) الإجمالي (حسب التصفية الحالية) ---
+    with col_total:
+        if not filtered.empty:
+            ac_total = filtered[agent_col].value_counts()
+            if not ac_total.empty:
+                names_total = ac_total.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_total.index
+                fig_agents_total = px.pie(
+                    names=names_total, values=ac_total.values,
+                    title="إجمالي نسبة الاتصالات (حسب التصفية الحالية)", hole=0.35
+                )
+                fig_agents_total.update_traces(textposition="inside", textinfo="percent+label")
+                fig_agents_total.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+                st.plotly_chart(fig_agents_total, use_container_width=True)
+            else:
+                st.info("لا تتوفر بيانات لمقدّمي الخدمة ضمن التصفية الحالية.")
+        else:
+            st.info("لا توجد بيانات بعد تطبيق التصفية الحالية.")
+
+    # --- 2) شهر Oct (يحترم اختيار مقدّم الخدمة، لا يتأثر بمرشح الشهر/الأسبوع) ---
+    with col_oct:
+        df_oct_scope = df_scope[df_scope["الشهر"] == "Oct"].copy() if "الشهر" in df_scope.columns else pd.DataFrame()
+        if not df_oct_scope.empty:
+            ac_oct = df_oct_scope[agent_col].value_counts()
+            if not ac_oct.empty:
+                names_oct = ac_oct.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_oct.index
+                fig_agents_oct = px.pie(
+                    names=names_oct, values=ac_oct.values,
+                    title="نسبة الاتصالات — شهر أكتوبر (بنفس نطاق مقدّم الخدمة)", hole=0.35
+                )
+                fig_agents_oct.update_traces(textposition="inside", textinfo="percent+label")
+                fig_agents_oct.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+                st.plotly_chart(fig_agents_oct, use_container_width=True)
+            else:
+                st.info("لا توجد بيانات لشهر Oct لنفس نطاق مقدّم الخدمة.")
+        else:
+            st.info("لا توجد سجلات لشهر Oct في هذا النطاق.")
+
+    # --- 3) آخر أسبوع (أحدث WeekStart) ضمن نفس نطاق مقدّم الخدمة ---
+    with col_week:
+        if "WeekStart" in df_scope.columns and not df_scope.dropna(subset=["WeekStart"]).empty:
+            latest_ws = pd.to_datetime(df_scope["WeekStart"]).max()
+            df_last_week = df_scope[pd.to_datetime(df_scope["WeekStart"]) == latest_ws].copy()
+            if not df_last_week.empty:
+                ac_week = df_last_week[agent_col].value_counts()
+                names_week = ac_week.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_week.index
+                # عنوان واضح مع نطاق الأسبوع
+                we = pd.to_datetime(df_last_week["WeekEnd"].iloc[0]) if "WeekEnd" in df_last_week.columns else latest_ws + pd.Timedelta(days=4)
+                week_title = f"نسبة الاتصالات — آخر أسبوع ({latest_ws.strftime('%b %d')}–{we.strftime('%b %d')})"
+                fig_agents_week = px.pie(
+                    names=names_week, values=ac_week.values,
+                    title=week_title, hole=0.35
+                )
+                fig_agents_week.update_traces(textposition="inside", textinfo="percent+label")
+                fig_agents_week.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+                st.plotly_chart(fig_agents_week, use_container_width=True)
+            else:
+                st.info("لا توجد بيانات في آخر أسبوع داخل هذا النطاق.")
+        else:
+            st.info("لا يتوفر عمود WeekStart/WeekEnd لاستخراج آخر أسبوع.")
+else:
+    st.info("لا يوجد عمود لمقدّمي الخدمة في البيانات الحالية.")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# =============== (إضافة جديدة) Visual: التنبؤ بالاتصالات للشهر القادم ===============
+st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
+st.markdown("### التنبؤ بالاتصالات للشهر القادم")
+MONTHS_12 = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
+
+def next_month_label(curr: str) -> str:
+    if curr not in MONTHS_12:
+        return curr
+    i = MONTHS_12.index(curr)
+    return MONTHS_12[(i + 1) % 12]
+
+def forecast_figure(df_month_scope: pd.DataFrame):
+    if df_month_scope is None or df_month_scope.empty or "الشهر" not in df_month_scope.columns:
+        return None
+
+    # نحافظ على ترتيب الأشهر كما في MONTH_ORDER الموجودة (Aug, Sep, Oct)
+    month_totals = df_month_scope["الشهر"].value_counts().reindex(MONTH_ORDER).dropna()
+    if len(month_totals) < 1:
+        return None
+
+    # x الفعلية = أسماء الأشهر الموجودة فعليًا بالترتيب
+    x_labels_actual = month_totals.index.tolist()            # مثال: ['Aug','Sep','Oct']
+    x_idx = np.arange(len(x_labels_actual)).reshape(-1, 1)   # 0,1,2 …
+    y_val = month_totals.values.astype(float)
+
+    # اسم الشهر القادم الحقيقي (بدون modulo)
+    next_label = next_month_label(x_labels_actual[-1])
+
+    fig = go.Figure()
+
+    # المنحنى الفعلي
+    fig.add_trace(go.Scatter(
+        x=x_labels_actual, y=y_val, mode="lines+markers", name="فعلي",
+        line=dict(width=3), marker=dict(size=8)
+    ))
+
+    # نموذج خطي + نقطة التنبؤ + النطاق التقريبي
+    if _SK_OK and len(y_val) >= 2:
+        from sklearn.linear_model import LinearRegression
+        model = LinearRegression().fit(x_idx, y_val)
+        next_x_numeric = np.array([[len(x_labels_actual)]])  # التالي بعد آخر نقطة فعلية
+        pred = float(model.predict(next_x_numeric)[0])
+
+        resid = y_val - model.predict(x_idx)
+        sigma = float(np.std(resid)) if len(resid) > 1 else 0.0
+        ci_low = max(0.0, pred - 1.96 * sigma)
+        ci_high = pred + 1.96 * sigma
+
+        # خط الاتجاه: من أول شهر فعلي إلى الشهر المتوقع
+        line_x_full_num = np.arange(0, len(x_labels_actual) + 1)
+        line_x_full_lbl = x_labels_actual + [next_label]
+        line_y_full = model.predict(line_x_full_num.reshape(-1, 1))
+
+        fig.add_trace(go.Scatter(
+            x=line_x_full_lbl, y=line_y_full, mode="lines", name="اتجاه",
+            line=dict(dash="dot", width=2)
+        ))
+        # نقطة التنبؤ على **Nov** (أو الشهر التالي الفعلي)
+        fig.add_trace(go.Scatter(
+            x=[next_label], y=[pred], mode="markers+text", name="توقع الشهر القادم",
+            marker=dict(size=12, symbol="diamond"),
+            text=[f"{int(round(pred))}"], textposition="top center"
+        ))
+        # عمود النطاق التقريبي على نفس التصنيف (Nov)
+        fig.add_trace(go.Scatter(
+            x=[next_label, next_label], y=[ci_low, ci_high], mode="lines", name="نطاق تقريبي",
+            line=dict(color="rgba(164,220,255,.6)", width=8)
+        ))
+        # نثبت ترتيب المحور السيني لعرض Nov بعد Oct
+        fig.update_layout(
+            xaxis=dict(categoryorder="array", categoryarray=line_x_full_lbl)
+        )
+    else:
+        # بدون Sklearn: نعرض الفعلي فقط + نقطة تقدير مبسّطة إن توفرت شهران
+        if len(y_val) >= 2:
+            growth = y_val[-1] - y_val[-2]
+            pred = int(round(y_val[-1] + growth))
+            fig.add_trace(go.Scatter(
+                x=[next_label], y=[pred], mode="markers+text", name="توقع مبسّط",
+                marker=dict(size=12, symbol="diamond"),
+                text=[str(pred)], textposition="top center"
+            ))
+            fig.update_layout(
+                xaxis=dict(categoryorder="array", categoryarray=x_labels_actual + [next_label])
+            )
+
+    fig.update_layout(
+        title="منحنى الإجمالي الشهري + التوقع القادم",
+        template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+        margin=dict(t=60, b=40, l=20, r=20),
+        yaxis_title="عدد الاتصالات", xaxis_title="الشهر"
+    )
+    return fig
+
+
+fig_pred = forecast_figure(df_for_forecast)
+if fig_pred is not None:
+    st.plotly_chart(fig_pred, use_container_width=True)
+else:
+    st.info("البيانات غير كافية لعرض منحنى التنبؤ.")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
+# =============== خريطة (مدن/مناطق) ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
 st.markdown("### خريطة الاتصالات حسب المدينة/المنطقة")
-CITY_LATLON = {"الرياض": (24.7136, 46.6753),"جدة": (21.4858, 39.1925),"مكة": (21.3891, 39.8579),
-               "المدينة": (24.5247, 39.5692),"الدمام": (26.3927, 49.9777),"الخبر": (26.2794, 50.2083),
-               "الطائف": (21.2703, 40.4158),"أبها": (18.2465, 42.5117),"حائل": (27.5114, 41.7208),
-               "تبوك": (28.3838, 36.5662),"جازان": (16.8892, 42.5700)}
-REGION_LATLON = {"المنطقة الشرقية": (26.5, 49.8),"منطقة الرياض": (24.7, 46.7),"منطقة مكة": (21.4, 40.7),
-                 "منطقة المدينة": (24.6, 39.6),"منطقة القصيم": (26.3, 43.96),"منطقة تبوك": (28.4, 36.6),
-                 "منطقة حائل": (27.5, 41.7),"منطقة جازان": (16.9, 42.6),"منطقة نجران": (17.6, 44.4),
-                 "منطقة عسير": (18.2, 42.5),"منطقة الجوف": (29.97, 40.2),"الحدود الشمالية": (30.0, 41.0),
-                 "منطقة الباحة": (20.0, 41.45),"منطقة الطائف": (21.27, 40.42)}
+CITY_LATLON = {
+    "الرياض": (24.7136, 46.6753), "جدة": (21.4858, 39.1925), "مكة": (21.3891, 39.8579),
+    "المدينة": (24.5247, 39.5692), "الدمام": (26.3927, 49.9777), "الخبر": (26.2794, 50.2083),
+    "الطائف": (21.2703, 40.4158), "أبها": (18.2465, 42.5117), "حائل": (27.5114, 41.7208),
+    "تبوك": (28.3838, 36.5662), "جازان": (16.8892, 42.5700)
+}
+REGION_LATLON = {
+    "المنطقة الشرقية": (26.5, 49.8), "منطقة الرياض": (24.7, 46.7), "منطقة مكة": (21.4, 40.7),
+    "منطقة المدينة": (24.6, 39.6), "منطقة القصيم": (26.3, 43.96), "منطقة تبوك": (28.4, 36.6),
+    "منطقة حائل": (27.5, 41.7), "منطقة جازان": (16.9, 42.6), "منطقة نجران": (17.6, 44.4),
+    "منطقة عسير": (18.2, 42.5), "منطقة الجوف": (29.97, 40.2), "الحدود الشمالية": (30.0, 41.0),
+    "منطقة الباحة": (20.0, 41.45), "منطقة الطائف": (21.27, 40.42)
+}
 def build_map_df(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty: return pd.DataFrame(columns=["label","lat","lon","count"])
     rows = []
-    if "المدينه " in df.columns:
-        for name, n in df["المدينه "].value_counts().items():
+    city_col = "المدينة" if "المدينة" in df.columns else ("المدينه" if "المدينه" in df.columns else None)
+    if city_col:
+        for name, n in df[city_col].value_counts().items():
             nm = str(name).strip()
             if nm in CITY_LATLON:
                 lat, lon = CITY_LATLON[nm]
@@ -504,6 +737,7 @@ def build_map_df(df: pd.DataFrame) -> pd.DataFrame:
                 lat, lon = REGION_LATLON[nm]
                 rows.append({"label": nm, "lat": lat, "lon": lon, "count": int(n)})
     return pd.DataFrame(rows)
+
 map_df = build_map_df(filtered)
 if not map_df.empty:
     fig_map = px.scatter_mapbox(
@@ -514,15 +748,98 @@ if not map_df.empty:
     fig_map.update_layout(mapbox_style="carto-darkmatter", paper_bgcolor="rgba(0,0,0,0)",
                           margin=dict(t=60,b=20,l=10,r=10), template="plotly_dark")
     st.plotly_chart(fig_map, use_container_width=True)
-    figures["خريطة توزيع الاتصالات"] = fig_map
+else:
+    st.info("لا توجد إحداثيات مطابقة لأسماء المدن/المناطق ضمن المدى الحالي.")
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ───────── جدول + بحث ─────────
+# =============== Word Cloud — الخدمه المطلوبه ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
-st.markdown("### السجل التفصيلي ")
-cols_base = ['الشهر','التاريخ ','التاريخ/Date','اسم العميل ','المنطقة','المدينه ','الشركة','نوع الخدمة','مقدم الخدمة','مقدم الخدمة (ملف)']
+st.markdown("### ☁️ سحابة الكلمات — الخدمه المطلوبه")
+
+def find_arabic_font():
+    # ابحث عن خط عربي مناسب
+    candidates = [
+        os.path.join(ASSETS_DIR, "fonts", "Amiri-Regular.ttf"),
+        os.path.join(ASSETS_DIR, "fonts", "Cairo-Regular.ttf"),
+        os.path.join(ASSETS_DIR, "fonts", "NotoNaskhArabic-Regular.ttf"),
+        "../fonts/NotoNaskhArabic-Regular.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "arial.ttf"
+    ]
+    for fp in candidates:
+        if os.path.isfile(fp):
+            return fp
+    return None
+
+ARABIC_STOPWORDS = set("""
+في على الى إلى من عن مع لدى لدي عند ثم أو أم أن إن كان كانت يكون تكون تم تمّ تمَّ تمَّ قد لقد حيث الذي التي الذين اللذي اللتي هذا هذه هناك هنا جدا جداً فقط بشكل بشكلٍ أكثر أقل أكثرُ أقلُّ كل كافة جميع بعض أي اي شيء شئ شيئ شياً شيئا
+خدمة خدمه المطلوبة المطلوبه طلب طلبات العميل العملاء شركة شركات رقم نوع
+""".split())
+
+def normalize_text_ar(s: str) -> str:
+    if not isinstance(s, str): s = str(s)
+    s = s.strip()
+    # إزالة الرموز والأرقام
+    s = re.sub(r"[^\u0600-\u06FF\s]", " ", s)  # فقط العربية والمسافة
+    s = re.sub(r"\s+", " ", s)
+    return s
+
+def build_wordcloud_from_column(df: pd.DataFrame, colname: str):
+    if colname not in df.columns or df[colname].dropna().empty:
+        return None
+    # نص عربي مهيأ
+    words = []
+    for t in df[colname].dropna().astype(str):
+        t = normalize_text_ar(t)
+        for w in t.split():
+            if w and (w not in ARABIC_STOPWORDS):
+                words.append(w)
+    if not words:
+        return None
+    text = " ".join(words)
+
+    # دعم إعادة تشكيل العربية واتجاه RTL إن توفرت المكتبات
+    if AR_SUPPORT:
+        try:
+            reshaped = arabic_reshaper.reshape(text)
+            display_text = get_display(reshaped)
+        except Exception:
+            display_text = text
+    else:
+        display_text = text
+
+    font_path = find_arabic_font()
+
+    wc = WordCloud(
+        width=1200, height=520,
+        background_color="white",
+        max_words=300,
+        collocations=True,
+        prefer_horizontal=0.95,
+        font_path=font_path
+    ).generate(display_text)
+
+    fig = plt.figure(figsize=(12, 5.2))
+    plt.imshow(wc, interpolation="bilinear")
+    plt.axis("off")
+    plt.tight_layout()
+    return fig
+
+wc_fig = build_wordcloud_from_column(filtered, "الخدمه المطلوبه")
+if wc_fig is not None:
+    st.pyplot(wc_fig, use_container_width=True)
+else:
+    st.info("لا توجد بيانات كافية لإنشاء سحابة كلمات من عمود (الخدمه المطلوبه).")
+st.markdown('</div>', unsafe_allow_html=True)
+
+# =============== جدول التفاصيل + البحث ===============
+st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
+st.markdown("### السجل التفصيلي")
+cols_base = ['الشهر','التاريخ','التاريخ/Date','وسم الأسبوع','رقم الأسبوع',
+             'اسم العميل','المنطقة','المدينة','الشركة','نوع الخدمة','الخدمه المطلوبه','مقدم الخدمة (ملف)']
 show_cols = [c for c in cols_base if c in filtered.columns]
-q = st.text_input("ابحث داخل الجدول (الاسم/الشركة/المدينة/النوع...)","")
+q = st.text_input("ابحث داخل الجدول (الاسم/الشركة/المدينة/النوع/الخدمة...)", "")
 table_df = filtered.copy()
 if q.strip() and show_cols:
     ql = q.strip().lower()
@@ -532,88 +849,24 @@ if q.strip() and show_cols:
         mask |= s.str.contains(ql, na=False)
     table_df = table_df[mask]
 if show_cols:
-    st.dataframe(table_df[show_cols].reset_index(drop=True), use_container_width=True, height=420)
+    # ترجمة اسم الملف للعرض
+    if "مقدم الخدمة (ملف)" in table_df.columns:
+        table_df["مقدم الخدمة (ملف)"] = table_df["مقدم الخدمة (ملف)"].map(provider_to_ar)
+    st.dataframe(table_df[show_cols].reset_index(drop=True), use_container_width=True, height=460)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# ───────── تنبؤ + تحديث بطاقة التوقّع ─────────
+# =============== ملخص ذكي مختصر ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
-st.markdown("### التنبؤ بالاتصالات للشهر القادم")
-if "الشهر" in data.columns and not data.empty:
-    month_totals = data["الشهر"].value_counts().reindex(MONTH_ORDER).dropna()
-    if len(month_totals) >= 1:
-        mt_index = np.array([MONTH_INDEX[m] for m in month_totals.index]).reshape(-1,1)
-        mt_values = month_totals.values.astype(float)
-        if _SK_OK and len(mt_values) >= 2:
-            model = LinearRegression().fit(mt_index, mt_values)
-            next_x = np.array([[mt_index[-1][0] + 1]])
-            pred_next = float(model.predict(next_x)[0])
-            resid = mt_values - model.predict(mt_index)
-            sigma = float(np.std(resid)) if len(resid) > 1 else 0.0
-            ci_low = max(0.0, pred_next - 1.96 * sigma)
-            ci_high = pred_next + 1.96 * sigma
-            line_x = np.arange(mt_index[0][0], next_x[0][0] + 1)
-            line_y = model.predict(line_x.reshape(-1,1))
-            fig_pred = go.Figure()
-            fig_pred.add_trace(go.Scatter(x=[MONTH_ORDER[i] for i in mt_index.flatten()], y=mt_values,
-                                          mode="lines+markers", name="فعلي", line=dict(width=3), marker=dict(size=8)))
-            fig_pred.add_trace(go.Scatter(x=[MONTH_ORDER[i % 12] for i in line_x], y=line_y,
-                                          mode="lines", name="اتجاه", line=dict(dash="dot", width=2)))
-            fig_pred.add_trace(go.Scatter(x=[MONTH_ORDER[next_x[0][0] % 12]], y=[pred_next],
-                                          mode="markers+text", name="توقع الشهر القادم",
-                                          marker=dict(size=12, symbol="diamond"),
-                                          text=[f"{int(round(pred_next))}"], textposition="top center"))
-            fig_pred.add_trace(go.Scatter(x=[MONTH_ORDER[next_x[0][0] % 12], MONTH_ORDER[next_x[0][0] % 12]],
-                                          y=[ci_low, ci_high], mode="lines", name="نطاق تقريبي",
-                                          line=dict(color="rgba(164,220,255,.6)", width=8)))
-            fig_pred.update_layout(title="منحنى الإجمالي الشهري + التوقع القادم",
-                                   template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
-                                   plot_bgcolor="rgba(255,255,255,0.02)", margin=dict(t=60,b=40,l=20,r=20),
-                                   yaxis_title="عدد الاتصالات", xaxis_title="الشهر")
-            st.plotly_chart(fig_pred, use_container_width=True)
-
-            # تحديث بطاقة التوقّع أعلى الصفحة (نفس المقاس)
-            st.markdown(f"""<div class="kpi i4" style="margin-top:.5rem;">
-              <div class="title">توقّع الشهر القادم</div>
-              <div class="value">{int(round(pred_next))}</div>
-              <div class="badge" style="margin-top:.35rem;">نطاق تقريبي: {int(round(ci_low))} – {int(round(ci_high))}</div>
-            </div>""", unsafe_allow_html=True)
-        else:
-            if len(mt_values) >= 2:
-                growth = mt_values[-1] - mt_values[-2]
-                pred_next = int(round(mt_values[-1] + growth))
-                st.markdown(f"""<div class="kpi i4" style="margin-top:.5rem;">
-                <div class="title">توقّع الشهر القادم (تقدير مبسّط)</div>
-                <div class="value">{pred_next}</div></div>""", unsafe_allow_html=True)
-            else:
-                st.info("البيانات غير كافية لحساب التنبؤ.")
-st.markdown('</div>', unsafe_allow_html=True)
-
-# ───────── ملخّص ذكي ─────────
-st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
-st.markdown("### 🤖 ملخّص ذكي للأداء ")
-def ar_text(s: str) -> str:
-    if not s: return s
-    if _AR_SHAPE_OK:
-        try:
-            return get_display(arabic_reshaper.reshape(s))
-        except Exception:
-            return s
-    return s
-def arabic_ai_summary(df: pd.DataFrame) -> str:
-    if df.empty: return "لا تتوفر بيانات ضمن النطاق المحدد.."
-    top_region = df["المنطقة"].value_counts().index[0] if "المنطقة" in df.columns and not df["المنطقة"].value_counts().empty else None
-    top_type   = df["نوع الخدمة"].value_counts().index[0] if "نوع الخدمة" in df.columns and not df["نوع الخدمة"].value_counts().empty else None
-    top_comp   = df["الشركة"].value_counts().index[0]   if "الشركة" in df.columns and not df["الشركة"].value_counts().empty else None
-    parts = [f"إجمالي الاتصالات في النطاق الحالي بلغ **{len(df)}** اتصالًا."]
-    if top_region: parts.append(f"الأكثر نشاطًا: **{top_region}**.")
-    if top_type:   parts.append(f"أشيع نوع اتصال: **{top_type}**.")
-    if top_comp:   parts.append(f"الشركة الأبرز تواصلًا: **{top_comp}**.")
-    if "الشهر" in df.columns:
-        by_m = df["الشهر"].value_counts().reindex(MONTH_ORDER).dropna()
-        if len(by_m) >= 2:
-            delta = int(by_m.iloc[-1] - by_m.iloc[-2])
-            trend = "ارتفاع" if delta > 0 else ("انخفاض" if delta < 0 else "ثبات")
-            parts.append(f"الاتجاه: **{trend}** بمقدار **{abs(delta)}** مقارنةً بالشهر السابق.")
+st.markdown("### 🤖 ملخّص ذكي")
+def quick_summary(df: pd.DataFrame) -> str:
+    if df.empty: return "لا تتوفر بيانات ضمن النطاق المحدد."
+    parts = [f"إجمالي الاتصالات: **{len(df)}**."]
+    if "المنطقة" in df.columns and not df["المنطقة"].value_counts().empty:
+        parts.append(f"الأكثر نشاطًا: **{df['المنطقة'].value_counts().idxmax()}**.")
+    if "نوع الخدمة" in df.columns and not df["نوع الخدمة"].value_counts().empty:
+        parts.append(f"أشيع نوع: **{df['نوع الخدمة'].value_counts().idxmax()}**.")
+    if "الشركة" in df.columns and not df["الشركة"].value_counts().empty:
+        parts.append(f"الشركة الأبرز: **{df['الشركة'].value_counts().idxmax()}**.")
     return " ".join(parts)
-st.write(arabic_ai_summary(filtered))
+st.write(quick_summary(filtered))
 st.markdown('</div>', unsafe_allow_html=True)
