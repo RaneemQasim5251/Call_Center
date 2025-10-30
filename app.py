@@ -16,7 +16,7 @@ except Exception:
 
 # WordCloud + Arabic support
 import matplotlib.pyplot as plt
-from wordcloud import WordCloud
+# from wordcloud import WordCloud  # Disabled, see below
 try:
     import arabic_reshaper
     from bidi.algorithm import get_display
@@ -740,14 +740,25 @@ def build_map_df(df: pd.DataFrame) -> pd.DataFrame:
 
 map_df = build_map_df(filtered)
 if not map_df.empty:
-    fig_map = px.scatter_mapbox(
-        map_df, lat="lat", lon="lon", size="count", color="count",
-        hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
-        size_max=45, zoom=4.2, height=520, title="خريطة توزيع الاتصالات"
-    )
-    fig_map.update_layout(mapbox_style="carto-darkmatter", paper_bgcolor="rgba(0,0,0,0)",
-                          margin=dict(t=60,b=20,l=10,r=10), template="plotly_dark")
-    st.plotly_chart(fig_map, use_container_width=True)
+    try:
+        # Try px.scatter_map if available (plotly >=5.21), fallback to px.scatter_mapbox
+        if hasattr(px, 'scatter_map'):
+            fig_map = px.scatter_map(
+                map_df, lat="lat", lon="lon", size="count", color="count",
+                hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
+                size_max=45, zoom=4.2, height=520, title="خريطة توزيع الاتصالات"
+            )
+        else:
+            fig_map = px.scatter_mapbox(
+                map_df, lat="lat", lon="lon", size="count", color="count",
+                hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
+                size_max=45, zoom=4.2, height=520, title="خريطة توزيع الاتصالات"
+            )
+        fig_map.update_layout(mapbox_style="carto-darkmatter", paper_bgcolor="rgba(0,0,0,0)",
+                              margin=dict(t=60,b=40,l=10,r=10), template="plotly_dark")
+        st.plotly_chart(fig_map, use_container_width=True)
+    except Exception as e:
+        st.warning(f"❗ تعذّر رسم الخريطة: {e}")
 else:
     st.info("لا توجد إحداثيات مطابقة لأسماء المدن/المناطق ضمن المدى الحالي.")
 st.markdown('</div>', unsafe_allow_html=True)
@@ -756,81 +767,8 @@ st.markdown('</div>', unsafe_allow_html=True)
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
 st.markdown("### ☁️ سحابة الكلمات — الخدمه المطلوبه")
 
-def find_arabic_font():
-    # ابحث عن خط عربي مناسب
-    candidates = [
-        os.path.join(ASSETS_DIR, "fonts", "Amiri-Regular.ttf"),
-        os.path.join(ASSETS_DIR, "fonts", "Cairo-Regular.ttf"),
-        os.path.join(ASSETS_DIR, "fonts", "NotoNaskhArabic-Regular.ttf"),
-        "../fonts/NotoNaskhArabic-Regular.ttf",
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
-        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-        "arial.ttf"
-    ]
-    for fp in candidates:
-        if os.path.isfile(fp):
-            return fp
-    return None
-
-ARABIC_STOPWORDS = set("""
-في على الى إلى من عن مع لدى لدي عند ثم أو أم أن إن كان كانت يكون تكون تم تمّ تمَّ تمَّ قد لقد حيث الذي التي الذين اللذي اللتي هذا هذه هناك هنا جدا جداً فقط بشكل بشكلٍ أكثر أقل أكثرُ أقلُّ كل كافة جميع بعض أي اي شيء شئ شيئ شياً شيئا
-خدمة خدمه المطلوبة المطلوبه طلب طلبات العميل العملاء شركة شركات رقم نوع
-""".split())
-
-def normalize_text_ar(s: str) -> str:
-    if not isinstance(s, str): s = str(s)
-    s = s.strip()
-    # إزالة الرموز والأرقام
-    s = re.sub(r"[^\u0600-\u06FF\s]", " ", s)  # فقط العربية والمسافة
-    s = re.sub(r"\s+", " ", s)
-    return s
-
-def build_wordcloud_from_column(df: pd.DataFrame, colname: str):
-    if colname not in df.columns or df[colname].dropna().empty:
-        return None
-    # نص عربي مهيأ
-    words = []
-    for t in df[colname].dropna().astype(str):
-        t = normalize_text_ar(t)
-        for w in t.split():
-            if w and (w not in ARABIC_STOPWORDS):
-                words.append(w)
-    if not words:
-        return None
-    text = " ".join(words)
-
-    # دعم إعادة تشكيل العربية واتجاه RTL إن توفرت المكتبات
-    if AR_SUPPORT:
-        try:
-            reshaped = arabic_reshaper.reshape(text)
-            display_text = get_display(reshaped)
-        except Exception:
-            display_text = text
-    else:
-        display_text = text
-
-    font_path = find_arabic_font()
-
-    wc = WordCloud(
-        width=1200, height=520,
-        background_color="white",
-        max_words=300,
-        collocations=True,
-        prefer_horizontal=0.95,
-        font_path=font_path
-    ).generate(display_text)
-
-    fig = plt.figure(figsize=(12, 5.2))
-    plt.imshow(wc, interpolation="bilinear")
-    plt.axis("off")
-    plt.tight_layout()
-    return fig
-
-wc_fig = build_wordcloud_from_column(filtered, "الخدمه المطلوبه")
-if wc_fig is not None:
-    st.pyplot(wc_fig, use_container_width=True)
-else:
-    st.info("لا توجد بيانات كافية لإنشاء سحابة كلمات من عمود (الخدمه المطلوبه).")
+# -- Disabled due to env/package incompatibility for wordcloud --
+st.info("ميزة السحابة الكلمات متوقفة مؤقتًا بسبب تعارض باقة wordcloud مع بيئة Python أو متطلبات التوافق؛ يمكنك تفعيلها محليًا على جهازك أو عند دعم النسخة لاحقًا.")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =============== جدول التفاصيل + البحث ===============
