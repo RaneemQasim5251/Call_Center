@@ -36,6 +36,11 @@ logo_bytes = read_logo_bytes()
 
 st.set_page_config(page_title="تقرير قسم خدمة العملاء 2025", page_icon="📞", layout="wide")
 
+if "figures" not in st.session_state:
+    st.session_state["figures"] = {}
+figures = st.session_state["figures"]
+
+
 DARK_GLASS_CSS = """
 <style>
 html, body, [data-testid="stAppViewContainer"], .block-container { direction: rtl; }
@@ -729,39 +734,48 @@ REGION_LATLON = {
 }
 
 def build_map_df(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty: return pd.DataFrame(columns=["label","lat","lon","count"])
+    if df.empty:
+        return pd.DataFrame(columns=["label","lat","lon","count"])
+
     rows = []
-    if "المدينه " in df.columns:
-        for name, n in df["المدينه "].value_counts().items():
-            name = str(name).strip()
+
+    # استخدمي "المدينة" (بعد التوحيد)، وإن ما وجدت ارجعي للاسم القديم احتياطًا
+    city_col = "المدينة" if "المدينة" in df.columns else ("المدينه " if "المدينه " in df.columns else None)
+    if city_col:
+        vc = df[city_col].astype(str).str.strip().value_counts()
+        for name, n in vc.items():
             if name in CITY_LATLON:
                 lat, lon = CITY_LATLON[name]
                 rows.append({"label": name, "lat": lat, "lon": lon, "count": int(n)})
+
+    # لو ما فيه مدن مطابقة، جربي على مستوى "المنطقة"
     if not rows and "المنطقة" in df.columns:
-        for name, n in df["المنطقة"].value_counts().items():
-            name = str(name).strip()
+        vc = df["المنطقة"].astype(str).str.strip().value_counts()
+        for name, n in vc.items():
             if name in REGION_LATLON:
                 lat, lon = REGION_LATLON[name]
                 rows.append({"label": name, "lat": lat, "lon": lon, "count": int(n)})
+
     return pd.DataFrame(rows)
 
+# ابنِ الداتا ثم ارسم ثم خزّن
 map_df = build_map_df(filtered)
 if not map_df.empty:
     fig_map = px.scatter_mapbox(
         map_df, lat="lat", lon="lon",
         size="count", color="count",
-        hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
+        hover_name="label", hover_data={"lat": False, "lon": False, "count": True},
         size_max=45, zoom=4.2, height=520,
         title="خريطة توزيع الاتصالات"
     )
     fig_map.update_layout(
         mapbox_style="carto-darkmatter",
         paper_bgcolor="rgba(0,0,0,0)",
-        margin=dict(t=60,b=20,l=10,r=10),
+        margin=dict(t=60, b=20, l=10, r=10),
         template="plotly_dark"
     )
     st.plotly_chart(fig_map, use_container_width=True)
-    figures["الخريطة"] = fig_map
+    figures["الخريطة"] = fig_map   # تأكدي أنك عرفتي figures سابقًا
 else:
     st.info("لا تتوفر بيانات كافية لعرض الخريطة.")
 
