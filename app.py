@@ -14,16 +14,6 @@ except Exception:
     _SK_OK = False
 # ============================================================
 
-# WordCloud + Arabic support
-import matplotlib.pyplot as plt
-# from wordcloud import WordCloud  # Disabled, see below
-try:
-    import arabic_reshaper
-    from bidi.algorithm import get_display
-    AR_SUPPORT = True
-except Exception:
-    AR_SUPPORT = False
-
 # =============== إعداد عام + شعار ===============
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(APP_DIR, "assets")
@@ -766,9 +756,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 # =============== Word Cloud — الخدمه المطلوبه ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
 st.markdown("### ☁️ سحابة الكلمات — الخدمه المطلوبه")
-
-# -- Disabled due to env/package incompatibility for wordcloud --
-st.info("ميزة السحابة الكلمات متوقفة مؤقتًا بسبب تعارض باقة wordcloud مع بيئة Python أو متطلبات التوافق؛ يمكنك تفعيلها محليًا على جهازك أو عند دعم النسخة لاحقًا.")
+st.info("Word cloud is not available in this environment.")
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =============== جدول التفاصيل + البحث ===============

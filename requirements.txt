@@ -4,7 +4,7 @@ plotly==5.24.1
 
 # --- Data handling (match your current env) ---
 pandas==2.3.3
-numpy==1.26.4      # <== downgrade to numpy<2.0 for matplotlib compatibility
+numpy==1.26.4
 openpyxl==3.1.5
 xlrd==2.0.1
 
@@ -26,8 +26,4 @@ requests==2.32.3
 
 # --- Postgres / PGVector (binary wheels for Windows + Py3.13) ---
 psycopg[binary]==3.2.12
-
-#wordcloud==1.9.2         # <== Commented due to Python 3.13 incompatibility
-wordcloud==1.9.3.post1   # <== You may test this on local Python 3.12/3.11
-matplotlib==3.8.2         # <== This version works with numpy<2.0
 
