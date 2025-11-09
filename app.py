@@ -5,6 +5,11 @@ import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 import streamlit as st
+import matplotlib.pyplot as plt
+from wordcloud import WordCloud
+import arabic_reshaper
+from bidi.algorithm import get_display
+
 
 # ========== (إضافة جديدة) سكikit-learn اختياري للتنبؤ ==========
 _SK_OK = True
@@ -33,6 +38,28 @@ def read_logo_bytes():
     return None
 
 logo_bytes = read_logo_bytes()
+
+# دالة للحصول على مسار الخط العربي
+def get_arabic_font_path():
+    """إرجاع مسار الخط العربي إذا كان موجوداً - يبحث في عدة مسارات"""
+    # قائمة بالمسارات المحتملة للخط
+    possible_paths = [
+        os.path.join(ASSETS_DIR, "fonts", "NotoNaskhArabic-Regular.ttf"),
+        os.path.join(APP_DIR, "assets", "fonts", "NotoNaskhArabic-Regular.ttf"),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "fonts", "NotoNaskhArabic-Regular.ttf"),
+    ]
+    
+    # البحث في المسارات
+    for font_path in possible_paths:
+        try:
+            if os.path.isfile(font_path):
+                return os.path.abspath(font_path)
+        except Exception:
+            continue
+    
+    return None
+
+arabic_font_path = get_arabic_font_path()
 
 st.set_page_config(page_title="تقرير قسم خدمة العملاء 2025", page_icon="📞", layout="wide")
 
@@ -103,7 +130,7 @@ st.markdown(
 )
 
 # =============== إعداد الشهور وترجَمات الأسماء ===============
-MONTH_ORDER = ["Aug", "Sep", "Oct"]  # المعتمدة الآن
+MONTH_ORDER = ["Aug", "Sep", "Oct", "Nov"]  # المعتمدة الآن
 MONTH_INDEX = {m:i for i,m in enumerate(MONTH_ORDER)}
 MONTH_MAP = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
 INV_MONTH_MAP = {v:k for k,v in MONTH_MAP.items()}
@@ -123,23 +150,55 @@ def ar_to_provider(ar_name: str) -> str:
     rev = {v:k for k,v in PROVIDER_AR.items()}
     return rev.get(ar_name, ar_name)
 
+# دالة مساعدة لترجمة أسماء الأشهر
+MONTH_AR = {"Aug": "أغسطس", "Sep": "سبتمبر", "Oct": "أكتوبر", "Nov": "نوفمبر"}
+def month_to_ar(month: str) -> str:
+    return MONTH_AR.get(month, month)
+
 # --- توحيد قيم الشهر (Oct/October/أكتوبر… -> Oct) ---
 MONTH_SYNONYMS = {
     "aug": "Aug", "aug.": "Aug", "august": "Aug", "أغسطس": "Aug", "اغسطس": "Aug",
     "sep": "Sep", "sep.": "Sep", "september": "Sep", "سبتمبر": "Sep",
     "oct": "Oct", "oct.": "Oct", "october": "Oct", "أكتوبر": "Oct", "اكتوبر": "Oct",
+    "nov": "Nov", "nov.": "Nov", "november": "Nov", "نوفمبر": "Nov",
 }
 def normalize_month_value(val, dt):
-    s = (str(val).strip() if val is not None else "").lower()
-    if s in MONTH_SYNONYMS:
-        canon = MONTH_SYNONYMS[s]
+    # معالجة القيم الفارغة أو NaN
+    if pd.isna(val) or val is None:
+        if pd.notna(dt):
+            mnum = int(dt.month)
+            canon = INV_MONTH_MAP.get(mnum)
+            return canon if canon and canon in MONTH_ORDER else np.nan
+        return np.nan
+    
+    # تحويل إلى نص وتنظيف
+    s = str(val).strip()
+    if not s or s.lower() in ['nan', 'none', '']:
+        if pd.notna(dt):
+            mnum = int(dt.month)
+            canon = INV_MONTH_MAP.get(mnum)
+            return canon if canon and canon in MONTH_ORDER else np.nan
+        return np.nan
+    
+    # البحث في المرادفات (case-insensitive)
+    s_lower = s.lower()
+    if s_lower in MONTH_SYNONYMS:
+        canon = MONTH_SYNONYMS[s_lower]
         return canon if canon in MONTH_ORDER else np.nan
+    
+    # محاولة المطابقة مع أول 3 أحرف
+    if len(s) >= 3:
+        s_3 = s[:3].title()
+        if s_3 in MONTH_MAP:
+            canon = s_3
+            return canon if canon in MONTH_ORDER else np.nan
+    
+    # إذا فشل كل شيء ولكن التاريخ موجود، نستخدم التاريخ
     if pd.notna(dt):
-        mnum = int(dt.month); canon = INV_MONTH_MAP.get(mnum)
-        return canon if canon in MONTH_ORDER else np.nan
-    if len(s) >= 3 and s[:3].title() in MONTH_MAP:
-        canon = s[:3].title()
-        return canon if canon in MONTH_ORDER else np.nan
+        mnum = int(dt.month)
+        canon = INV_MONTH_MAP.get(mnum)
+        return canon if canon and canon in MONTH_ORDER else np.nan
+    
     return np.nan
 
 # =============== توحيد الأعمدة ===============
@@ -162,20 +221,63 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
 
 # =============== بناء التاريخ من (الشهر + اليوم) ===============
 def build_date_from_month_day(row: pd.Series):
-    m = str(row.get("الشهر","")).strip()
-    raw = str(row.get("التاريخ","")).strip()
-    if raw and ("/" in raw or "-" in raw):
-        dt = pd.to_datetime(raw, dayfirst=True, errors="coerce")
-        if pd.notna(dt): return dt
-    if m in MONTH_MAP:
+    # محاولة قراءة التاريخ مباشرة إذا كان موجوداً بتنسيق تاريخ
+    raw_date = row.get("التاريخ","")
+    if pd.notna(raw_date) and raw_date != "":
+        raw_str = str(raw_date).strip()
+        if "/" in raw_str or "-" in raw_str:
+            dt = pd.to_datetime(raw_str, dayfirst=True, errors="coerce")
+            if pd.notna(dt):
+                return dt
+    
+    # محاولة بناء التاريخ من الشهر واليوم
+    month_val = row.get("الشهر","")
+    day_val = row.get("التاريخ","")
+    
+    # معالجة الشهر
+    month_str = ""
+    if pd.notna(month_val) and month_val != "":
+        month_str = str(month_val).strip()
+    
+    # إذا كان الشهر في MONTH_MAP مباشرة (مثل "Nov", "Oct")
+    if month_str in MONTH_MAP:
         try:
-            day = int(float(raw)) if raw else 1
-            return pd.Timestamp(year=2025, month=MONTH_MAP[m], day=day)
-        except Exception:
+            # محاولة استخراج اليوم من عمود التاريخ
+            day_str = str(day_val).strip() if pd.notna(day_val) and day_val != "" else "1"
+            # إزالة أي تنسيقات تاريخية
+            if "/" in day_str:
+                day_str = day_str.split("/")[0].strip()
+            elif "-" in day_str:
+                day_str = day_str.split("-")[0].strip()
+            day = int(float(day_str)) if day_str and day_str.replace(".","").isdigit() else 1
+            # التأكد من أن اليوم صحيح (1-31)
+            day = max(1, min(31, day))
+            return pd.Timestamp(year=2025, month=MONTH_MAP[month_str], day=day)
+        except (ValueError, TypeError) as e:
+            # إذا فشل، نرجع NaT
             return pd.NaT
+    
+    # محاولة استخدام normalize_month_value للشهر
+    if month_str:
+        month_lower = month_str.lower()
+        if month_lower in MONTH_SYNONYMS:
+            canon_month = MONTH_SYNONYMS[month_lower]
+            if canon_month in MONTH_MAP:
+                try:
+                    day_str = str(day_val).strip() if pd.notna(day_val) and day_val != "" else "1"
+                    if "/" in day_str:
+                        day_str = day_str.split("/")[0].strip()
+                    elif "-" in day_str:
+                        day_str = day_str.split("-")[0].strip()
+                    day = int(float(day_str)) if day_str and day_str.replace(".","").isdigit() else 1
+                    day = max(1, min(31, day))
+                    return pd.Timestamp(year=2025, month=MONTH_MAP[canon_month], day=day)
+                except (ValueError, TypeError):
+                    return pd.NaT
+    
     return pd.NaT
 
-# =============== أسابيع الأحد→الخميس وترقيمها داخل الشهر ===============
+# =============== أسابيع الأحد→السبت وترقيمها داخل الشهر ===============
 def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
     if df.empty or "التاريخ/Date" not in df.columns:
         df["ISO_Year"]=np.nan; df["ISO_Week"]=np.nan
@@ -187,7 +289,7 @@ def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
     wd = d["التاريخ/Date"].dt.weekday              # Monday=0..Sunday=6
     start_offset = (wd + 1) % 7                     # للأحد
     d["WeekStart"] = d["التاريخ/Date"] - pd.to_timedelta(start_offset, unit="D")
-    d["WeekEnd"]   = d["WeekStart"] + pd.to_timedelta(4, unit="D")  # الخميس
+    d["WeekEnd"]   = d["WeekStart"] + pd.to_timedelta(6, unit="D")  # السبت (أسبوع كامل)
 
     d["ISO_Year"]  = d["WeekStart"].dt.isocalendar().year
     d["ISO_Week"]  = d["WeekStart"].dt.isocalendar().week
@@ -221,7 +323,9 @@ def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
             def label(ws,we):
                 if pd.isna(ws) or pd.isna(we): return ""
                 r = rank_map.get(ws, np.nan)
-                return f"الأسبوع {r} ({ws.strftime('%b %d')}–{we.strftime('%b %d')})"
+                # إضافة اسم الشهر للوضوح - كل شهر له ترقيم منفصل
+                month_name_ar = MONTH_AR.get(g.name, g.name)
+                return f"{month_name_ar} - الأسبوع {int(r)} ({ws.strftime('%d/%m')}–{we.strftime('%d/%m')})"
 
             gg = g.copy()
             gg["رقم الأسبوع"] = gg["WeekStart"].map(rank_map).astype("float")
@@ -255,6 +359,46 @@ def load_all(folder="data"):
                     quotechar='"',
                     skipinitialspace=True
                 )
+                
+                # التحقق إذا كان الملف يحتوي على header صحيح
+                # إذا كانت أسماء الأعمدة كلها أرقام أو فارغة، فالملف لا يحتوي على header
+                first_row_values = df.iloc[0].values if not df.empty else []
+                col_names = df.columns.tolist()
+                
+                # إذا كانت أسماء الأعمدة كلها أرقام (0, 1, 2, ...) أو كانت القيمة الأولى تبدو كبيانات وليست header
+                is_header_missing = (
+                    all(str(c).isdigit() for c in col_names) or
+                    (len(col_names) > 0 and len(df) > 0 and 
+                     any(str(first_row_values[i]).strip() not in col_names[i] for i in range(min(len(col_names), len(first_row_values))))
+                     and col_names[0] not in ["اسم العميل", "اسم العميل ", "name", "Name"])
+                )
+                
+                # إذا لم يكن هناك header صحيح، نقرأ الملف بدون header ونحدد الأعمدة يدوياً
+                if is_header_missing and len(df.columns) >= 10:
+                    # نقرأ الملف بدون header
+                    df = pd.read_csv(
+                        path,
+                        encoding="utf-8-sig",
+                        engine="python",
+                        on_bad_lines="skip",
+                        sep=",",
+                        quotechar='"',
+                        skipinitialspace=True,
+                        header=None
+                    )
+                    # نحدد أسماء الأعمدة بناءً على البنية المعروفة
+                    expected_cols = ["اسم العميل", "رقم الجوال", "المنطقة", "المدينة", "الشركة", 
+                                   "مقدم الخدمة", "نوع الخدمة", "الخدمه المطلوبه", "المسؤول", 
+                                   "الملاحظات", "الشهر", "التاريخ"]
+                    # نستخدم أسماء الأعمدة المتوقعة حسب عدد الأعمدة الفعلية
+                    if len(df.columns) >= len(expected_cols):
+                        df.columns = expected_cols[:len(df.columns)]
+                    elif len(df.columns) == 12:
+                        df.columns = expected_cols
+                    else:
+                        # إذا كان عدد الأعمدة مختلف، نستخدم الأسماء الأساسية
+                        df.columns = expected_cols[:len(df.columns)] + [f"عمود_{i}" for i in range(len(expected_cols), len(df.columns))]
+                
                 break
             except Exception as e:
                 err_msg = str(e)
@@ -275,14 +419,32 @@ def load_all(folder="data"):
         df["التاريخ/Date"] = pd.to_datetime(df.apply(build_date_from_month_day, axis=1), errors="coerce")
 
         # --- الشهر: توحيد قوي قبل الحصر ---
-        orig_month_col = df["الشهر"] if "الشهر" in df.columns else pd.Series([None]*len(df))
-        df["الشهر"] = [normalize_month_value(m, dt) for m, dt in zip(orig_month_col, df["التاريخ/Date"])]
-        df["الشهر"] = df["الشهر"].where(df["الشهر"].isin(MONTH_ORDER), np.nan)
+        if "الشهر" not in df.columns:
+            # إذا لم يوجد عمود الشهر، نحاول استخراجه من التاريخ
+            df["الشهر"] = df["التاريخ/Date"].dt.month.map(INV_MONTH_MAP).where(
+                df["التاريخ/Date"].dt.month.map(INV_MONTH_MAP).isin(MONTH_ORDER), np.nan
+            )
+        else:
+            # تطبيق التوحيد مع التاريخ (معالجة صحيحة للقيم NaN)
+            month_series = df["الشهر"].copy()
+            date_series = df["التاريخ/Date"]
+            df["الشهر"] = [
+                normalize_month_value(
+                    month_series.iloc[i] if pd.notna(month_series.iloc[i]) else None,
+                    date_series.iloc[i] if pd.notna(date_series.iloc[i]) else pd.NaT
+                )
+                for i in range(len(df))
+            ]
+            # التأكد من أن القيم في MONTH_ORDER فقط
+            df["الشهر"] = df["الشهر"].where(df["الشهر"].isin(MONTH_ORDER), np.nan)
 
-        # توحيد النصوص
-        for col in ["اسم العميل","رقم الجوال","المنطقة","المدينة","الشركة","نوع الخدمة","الخدمه المطلوبه","الشهر"]:
+        # توحيد النصوص (باستثناء الشهر الذي تم توحيده بالفعل)
+        text_cols = ["اسم العميل","رقم الجوال","المنطقة","المدينة","الشركة","نوع الخدمة","الخدمه المطلوبه"]
+        for col in text_cols:
             if col in df.columns:
                 df[col] = df[col].astype(str).str.strip()
+        # الشهر: التأكد من أنه نص (لكن نحافظ على NaN كقيمة NaN وليس نص "nan")
+        # لا نحتاج لتحويله لأن normalize_month_value يعطينا القيمة الصحيحة بالفعل
 
         # بناء أسابيع العمل
         df = add_week_columns(df)
@@ -330,24 +492,44 @@ with st.form("main_filters"):
         months_av = []
         if "الشهر" in df_scope.columns:
             months_av = [m for m in MONTH_ORDER if m in df_scope["الشهر"].dropna().unique().tolist()]
-        month_choice = st.selectbox("اختر الشهر", ["الكل"] + months_av, index=0)
+        # عرض الأسماء بالعربية في القائمة
+        month_options = ["الكل"] + [f"{month_to_ar(m)} ({m})" for m in months_av]
+        month_choice_display = st.selectbox("اختر الشهر", month_options, index=0)
+        # استخراج رمز الشهر من الاختيار
+        if month_choice_display == "الكل":
+            month_choice = "الكل"
+        else:
+            # استخراج رمز الشهر من النص (مثل "أغسطس (Aug)" -> "Aug")
+            month_choice = month_choice_display.split("(")[-1].replace(")", "").strip() if "(" in month_choice_display else month_choice_display
+        st.caption("💡 كل شهر له أسابيع منفصلة. يُفضل اختيار شهر أولاً لتصفية الأسابيع.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c3:
-        st.markdown('<div class="glass"><b>تصفية حسب الأسبوع داخل الشهر</b>', unsafe_allow_html=True)
+        st.markdown('<div class="glass"><b>تصفية حسب الأسبوع</b>', unsafe_allow_html=True)
         # الأسبوع يظهر دائمًا: نجمع أسابيع نطاق df_scope ثم نقيّد إذا تم اختيار شهر
         week_options = ["الكل"]
         tmp = df_scope.copy()
+        
+        # إذا تم اختيار شهر، نعرض أسابيع هذا الشهر فقط
         if month_choice != "الكل":
             tmp = tmp[tmp["الشهر"] == month_choice]
+            month_name_ar = month_to_ar(month_choice)
+            help_text = f"📅 يتم عرض أسابيع شهر {month_name_ar} فقط. الأرقام (1، 2، 3...) تبدأ من جديد في كل شهر."
+        else:
+            help_text = "📅 ملاحظة: كل شهر له أسابيع منفصلة ومُرقمة بشكل مستقل. يُفضل اختيار شهر أولاً لتسهيل البحث."
+        
         if "وسم الأسبوع" in tmp.columns and not tmp.empty:
+            # ترتيب الأسابيع حسب التاريخ (تصاعدي) - التأكد من الترتيب الصحيح
             uniq = (
-                tmp.dropna(subset=["WeekStart","WeekEnd"])
+                tmp.dropna(subset=["WeekStart","WeekEnd", "وسم الأسبوع"])
                    .drop_duplicates(subset=["WeekStart"])
-                   .sort_values(["WeekStart"])
+                   .sort_values("WeekStart", ascending=True)  # ترتيب تصاعدي حسب التاريخ
             )
+            # إضافة الأسابيع مرتبة حسب التاريخ
             week_options += uniq["وسم الأسبوع"].tolist()
+        
         week_choice = st.selectbox("اختر الأسبوع", week_options, index=0)
+        st.caption(help_text)
         st.markdown('</div>', unsafe_allow_html=True)
 
     st.form_submit_button("تطبيق المرشّحات ✅")
@@ -369,7 +551,7 @@ def top_month_in_scope(df):
 
 def average_for_selection(df: pd.DataFrame, month_choice: str, week_choice: str):
     """
-    - إذا تم اختيار أسبوع: متوسط المكالمات اليومي (أحد–خميس).
+    - إذا تم اختيار أسبوع: متوسط المكالمات اليومي (أحد–سبت).
     - إذا تم اختيار شهر فقط: متوسط المكالمات الأسبوعي داخل هذا الشهر.
     - إذا لم يُحدَّد شهر/أسبوع: متوسط المكالمات الشهري على النطاق الحالي.
     """
@@ -383,7 +565,7 @@ def average_for_selection(df: pd.DataFrame, month_choice: str, week_choice: str)
             return 0.0, "—"
         ws = pd.to_datetime(wdf["WeekStart"].iloc[0])
         we = pd.to_datetime(wdf["WeekEnd"].iloc[0])
-        day_count = max(1, min(int((we - ws).days) + 1, 5))  # أحد..خميس
+        day_count = max(1, int((we - ws).days) + 1)  # أحد..سبت (أسبوع كامل)
         avg_per_day = len(wdf) / day_count
         return float(avg_per_day), f"متوسط المكالمات اليومي — {ws.strftime('%b %d')}–{we.strftime('%b %d')}"
 
@@ -526,7 +708,7 @@ st.markdown("### نسبة الاتصالات حسب مقدّم الخدمة")
 agent_col = "مقدم الخدمة (ملف)" if "مقدم الخدمة (ملف)" in df_scope.columns else ("مقدم الخدمة" if "مقدم الخدمة" in df_scope.columns else None)
 
 if agent_col:
-    col_total, col_oct, col_week = st.columns(3)
+    col_total, col_oct, col_nov, col_week = st.columns(4)
 
     # --- 1) الإجمالي (حسب التصفية الحالية) ---
     with col_total:
@@ -565,7 +747,26 @@ if agent_col:
         else:
             st.info("لا توجد سجلات لشهر Oct في هذا النطاق.")
 
-    # --- 3) آخر أسبوع (أحدث WeekStart) ضمن نفس نطاق مقدّم الخدمة ---
+    # --- 3) شهر Nov (يحترم اختيار مقدّم الخدمة، لا يتأثر بمرشح الشهر/الأسبوع) ---
+    with col_nov:
+        df_nov_scope = df_scope[df_scope["الشهر"] == "Nov"].copy() if "الشهر" in df_scope.columns else pd.DataFrame()
+        if not df_nov_scope.empty:
+            ac_nov = df_nov_scope[agent_col].value_counts()
+            if not ac_nov.empty:
+                names_nov = ac_nov.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_nov.index
+                fig_agents_nov = px.pie(
+                    names=names_nov, values=ac_nov.values,
+                    title="نسبة الاتصالات — شهر نوفمبر (بنفس نطاق مقدّم الخدمة)", hole=0.35
+                )
+                fig_agents_nov.update_traces(textposition="inside", textinfo="percent+label")
+                fig_agents_nov.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+                st.plotly_chart(fig_agents_nov, use_container_width=True)
+            else:
+                st.info("لا توجد بيانات لشهر Nov لنفس نطاق مقدّم الخدمة.")
+        else:
+            st.info("لا توجد سجلات لشهر Nov في هذا النطاق.")
+
+    # --- 4) آخر أسبوع (أحدث WeekStart) ضمن نفس نطاق مقدّم الخدمة ---
     with col_week:
         if "WeekStart" in df_scope.columns and not df_scope.dropna(subset=["WeekStart"]).empty:
             latest_ws = pd.to_datetime(df_scope["WeekStart"]).max()
@@ -574,7 +775,7 @@ if agent_col:
                 ac_week = df_last_week[agent_col].value_counts()
                 names_week = ac_week.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_week.index
                 # عنوان واضح مع نطاق الأسبوع
-                we = pd.to_datetime(df_last_week["WeekEnd"].iloc[0]) if "WeekEnd" in df_last_week.columns else latest_ws + pd.Timedelta(days=4)
+                we = pd.to_datetime(df_last_week["WeekEnd"].iloc[0]) if "WeekEnd" in df_last_week.columns else latest_ws + pd.Timedelta(days=6)
                 week_title = f"نسبة الاتصالات — آخر أسبوع ({latest_ws.strftime('%b %d')}–{we.strftime('%b %d')})"
                 fig_agents_week = px.pie(
                     names=names_week, values=ac_week.values,
@@ -606,13 +807,13 @@ def forecast_figure(df_month_scope: pd.DataFrame):
     if df_month_scope is None or df_month_scope.empty or "الشهر" not in df_month_scope.columns:
         return None
 
-    # نحافظ على ترتيب الأشهر كما في MONTH_ORDER الموجودة (Aug, Sep, Oct)
+    # نحافظ على ترتيب الأشهر كما في MONTH_ORDER الموجودة (Aug, Sep, Oct, Nov)
     month_totals = df_month_scope["الشهر"].value_counts().reindex(MONTH_ORDER).dropna()
     if len(month_totals) < 1:
         return None
 
     # x الفعلية = أسماء الأشهر الموجودة فعليًا بالترتيب
-    x_labels_actual = month_totals.index.tolist()            # مثال: ['Aug','Sep','Oct']
+    x_labels_actual = month_totals.index.tolist()            # مثال: ['Aug','Sep','Oct','Nov']
     x_idx = np.arange(len(x_labels_actual)).reshape(-1, 1)   # 0,1,2 …
     y_val = month_totals.values.astype(float)
 
@@ -731,24 +932,63 @@ def build_map_df(df: pd.DataFrame) -> pd.DataFrame:
 map_df = build_map_df(filtered)
 if not map_df.empty:
     try:
-        # Try px.scatter_map if available (plotly >=5.21), fallback to px.scatter_mapbox
-        if hasattr(px, 'scatter_map'):
-            fig_map = px.scatter_map(
-                map_df, lat="lat", lon="lon", size="count", color="count",
-                hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
-                size_max=45, zoom=4.2, height=520, title="خريطة توزيع الاتصالات"
+        # استخدام scatter_geo الذي يعمل بدون الحاجة لـ Mapbox token
+        fig_map = px.scatter_geo(
+            map_df, 
+            lat="lat", 
+            lon="lon", 
+            size="count", 
+            color="count",
+            hover_name="label", 
+            hover_data={"lat":False,"lon":False,"count":True},
+            size_max=30,
+            title="خريطة توزيع الاتصالات",
+            projection="natural earth"
+        )
+        fig_map.update_geos(
+            visible=True,
+            resolution=50,
+            showcountries=True,
+            countrycolor="rgba(255,255,255,0.3)",
+            showcoastlines=True,
+            coastlinecolor="rgba(255,255,255,0.2)",
+            showland=True,
+            landcolor="rgba(30,30,30,0.5)",
+            showocean=True,
+            oceancolor="rgba(20,20,20,0.8)",
+            bgcolor="rgba(0,0,0,0)"
+        )
+        fig_map.update_layout(
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            margin=dict(t=60,b=40,l=10,r=10),
+            template="plotly_dark",
+            height=520,
+            geo=dict(
+                center=dict(lat=24, lon=45),  # مركز المملكة العربية السعودية
+                projection_scale=5  # تكبير للتركيز على السعودية
             )
-        else:
-            fig_map = px.scatter_mapbox(
-                map_df, lat="lat", lon="lon", size="count", color="count",
-                hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
-                size_max=45, zoom=4.2, height=520, title="خريطة توزيع الاتصالات"
-            )
-        fig_map.update_layout(mapbox_style="carto-darkmatter", paper_bgcolor="rgba(0,0,0,0)",
-                              margin=dict(t=60,b=40,l=10,r=10), template="plotly_dark")
+        )
         st.plotly_chart(fig_map, use_container_width=True)
     except Exception as e:
-        st.warning(f"❗ تعذّر رسم الخريطة: {e}")
+        # إذا فشل scatter_geo، نستخدم scatter_map إذا كان متاحاً
+        try:
+            if hasattr(px, 'scatter_map'):
+                fig_map = px.scatter_map(
+                    map_df, lat="lat", lon="lon", size="count", color="count",
+                    hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
+                    size_max=45, zoom=4.2, height=520, title="خريطة توزيع الاتصالات"
+                )
+                fig_map.update_layout(
+                    paper_bgcolor="rgba(0,0,0,0)",
+                    margin=dict(t=60,b=40,l=10,r=10),
+                    template="plotly_dark"
+                )
+                st.plotly_chart(fig_map, use_container_width=True)
+            else:
+                st.warning(f"❗ تعذّر رسم الخريطة: {e}")
+        except Exception as e2:
+            st.warning(f"❗ تعذّر رسم الخريطة: {e2}")
 else:
     st.info("لا توجد إحداثيات مطابقة لأسماء المدن/المناطق ضمن المدى الحالي.")
 st.markdown('</div>', unsafe_allow_html=True)
@@ -756,7 +996,150 @@ st.markdown('</div>', unsafe_allow_html=True)
 # =============== Word Cloud — الخدمه المطلوبه ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
 st.markdown("### ☁️ سحابة الكلمات — الخدمه المطلوبه")
-st.info("Word cloud is not available in this environment.")
+# محاولة إنشاء سحابة الكلمات
+try:
+    from wordcloud import WordCloud
+    import matplotlib
+    matplotlib.use('Agg')  # استخدام backend غير تفاعلي
+    import matplotlib.pyplot as plt
+    from io import BytesIO
+    import base64
+    
+    if "الخدمه المطلوبه" in filtered.columns and not filtered.empty:
+        # جمع جميع النصوص
+        text_data = filtered["الخدمه المطلوبه"].dropna().astype(str)
+        # تنظيف النصوص وإزالة القيم الفارغة
+        text_list = [t.strip() for t in text_data.tolist() if t.strip() and t.strip() != 'nan']
+        text_clean = " ".join(text_list)
+        
+        if text_clean.strip() and len(text_clean) > 3:
+            # إنشاء سحابة الكلمات مع إعدادات محسّنة للنصوص العربية
+            # استخدام الخط العربي إذا كان متاحاً
+            font_path_to_use = arabic_font_path if arabic_font_path else None
+            
+            try:
+                # إنشاء سحابة الكلمات مع الخط العربي
+                wordcloud_params = {
+                    'width': 1000,
+                    'height': 500,
+                    'background_color': None,  # شفاف
+                    'mode': 'RGBA',  # استخدام وضع RGBA للشفافية
+                    'colormap': 'viridis',
+                    'max_words': 150,
+                    'prefer_horizontal': 0.6,
+                    'relative_scaling': 0.4,
+                    'collocation_threshold': 10,
+                    'min_font_size': 15,  # زيادة حجم الخط الأدنى للوضوح
+                    'max_font_size': 120,
+                    'font_step': 2,
+                    'regexp': None,  # استخدام المعالجة الافتراضية
+                    'stopwords': None,  # لا نستخدم stopwords
+                    'normalize_plurals': False
+                }
+                
+                # إضافة مسار الخط إذا كان متاحاً
+                if font_path_to_use and os.path.isfile(font_path_to_use):
+                    wordcloud_params['font_path'] = font_path_to_use
+                    # استخدام الخط العربي لضمان وضوح النص العربي
+                
+                wordcloud = WordCloud(**wordcloud_params).generate(text_clean)
+                
+            except Exception as wc_error:
+                # إذا فشل مع الخط العربي، نجرب بدون خط أو بإعدادات أبسط
+                try:
+                    wordcloud_params_simple = {
+                        'width': 1000,
+                        'height': 500,
+                        'background_color': None,
+                        'mode': 'RGBA',
+                        'colormap': 'viridis',
+                        'max_words': 100,
+                        'min_font_size': 15,
+                        'max_font_size': 100
+                    }
+                    if font_path_to_use and os.path.isfile(font_path_to_use):
+                        wordcloud_params_simple['font_path'] = font_path_to_use
+                    wordcloud = WordCloud(**wordcloud_params_simple).generate(text_clean)
+                except Exception as wc_error2:
+                    # آخر محاولة بدون خط مخصص
+                    wordcloud = WordCloud(
+                        width=1000,
+                        height=500,
+                        background_color=None,
+                        mode='RGBA',
+                        colormap='viridis',
+                        max_words=100
+                    ).generate(text_clean)
+            
+            # إنشاء الصورة مع إعدادات محسّنة للوضوح
+            plt.ioff()  # إيقاف الوضع التفاعلي
+            # زيادة DPI للحصول على صورة أوضح للنص العربي
+            fig, ax = plt.subplots(figsize=(14, 7), facecolor='none', dpi=150)
+            ax.imshow(wordcloud, interpolation='bilinear', aspect='auto')
+            ax.axis('off')
+            ax.set_facecolor('none')
+            fig.patch.set_facecolor('none')
+            plt.tight_layout(pad=0)
+            
+            # حفظ الصورة في buffer بدقة أعلى للوضوح
+            buf = BytesIO()
+            fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, 
+                       facecolor='none', edgecolor='none', transparent=True, dpi=150)
+            buf.seek(0)
+            
+            # تحويل إلى base64 لعرضها
+            img_str = base64.b64encode(buf.read()).decode()
+            st.markdown(
+                f'<div style="text-align:center; background:transparent;"><img src="data:image/png;base64,{img_str}" style="max-width:100%; height:auto; background:transparent; border-radius:10px;" /></div>',
+                unsafe_allow_html=True
+            )
+            plt.close(fig)
+            buf.close()
+        else:
+            st.info("لا توجد بيانات كافية للخدمات المطلوبة ضمن النطاق المحدد.")
+    else:
+        st.info("لا يتوفر عمود 'الخدمه المطلوبه' في البيانات المصفاة.")
+except ImportError:
+    # إذا لم تكن المكتبة متوفرة، نستخدم حل بديل بسيط
+    if "الخدمه المطلوبه" in filtered.columns and not filtered.empty:
+        text_data = filtered["الخدمه المطلوبه"].dropna().astype(str)
+        if not text_data.empty:
+            # عرض أكثر الكلمات شيوعاً كبديل
+            from collections import Counter
+            import re
+            all_text = " ".join(text_data.tolist())
+            # تقسيم النص إلى كلمات
+            words = re.findall(r'\b\w+\b', all_text, re.UNICODE)
+            word_counts = Counter(words)
+            top_words = word_counts.most_common(20)
+            
+            if top_words:
+                st.markdown("**أكثر الكلمات شيوعاً:**")
+                words_text = " | ".join([f"**{word}** ({count})" for word, count in top_words[:15]])
+                st.markdown(f'<div style="text-align:center; padding:20px; line-height:2.5;">{words_text}</div>', unsafe_allow_html=True)
+            else:
+                st.info("لا توجد كلمات لعرضها.")
+        else:
+            st.info("لا توجد بيانات للخدمات المطلوبة ضمن النطاق المحدد.")
+    else:
+        st.info("لا يتوفر عمود 'الخدمه المطلوبه' في البيانات المصفاة.")
+except Exception as e:
+    st.warning(f"تعذّر إنشاء سحابة الكلمات: {str(e)}")
+    # حل بديل: عرض أكثر الكلمات شيوعاً
+    if "الخدمه المطلوبه" in filtered.columns and not filtered.empty:
+        text_data = filtered["الخدمه المطلوبه"].dropna().astype(str)
+        if not text_data.empty:
+            from collections import Counter
+            import re
+            all_text = " ".join(text_data.tolist())
+            words = re.findall(r'\b\w+\b', all_text, re.UNICODE)
+            word_counts = Counter(words)
+            top_words = word_counts.most_common(20)
+            if top_words:
+                st.markdown("**أكثر الكلمات شيوعاً:**")
+                words_text = " | ".join([f"**{word}** ({count})" for word, count in top_words[:15]])
+                st.markdown(f'<div style="text-align:center; padding:20px; line-height:2.5;">{words_text}</div>', unsafe_allow_html=True)
+
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =============== جدول التفاصيل + البحث ===============
@@ -790,9 +1173,10 @@ def quick_summary(df: pd.DataFrame) -> str:
     if "المنطقة" in df.columns and not df["المنطقة"].value_counts().empty:
         parts.append(f"الأكثر نشاطًا: **{df['المنطقة'].value_counts().idxmax()}**.")
     if "نوع الخدمة" in df.columns and not df["نوع الخدمة"].value_counts().empty:
-        parts.append(f"أشيع نوع: **{df['نوع الخدمة'].value_counts().idxmax()}**.")
+        parts.append(f"نوع الخدمة الأكثر شيوعا: **{df['نوع الخدمة'].value_counts().idxmax()}**.")
     if "الشركة" in df.columns and not df["الشركة"].value_counts().empty:
         parts.append(f"الشركة الأبرز: **{df['الشركة'].value_counts().idxmax()}**.")
     return " ".join(parts)
 st.write(quick_summary(filtered))
 st.markdown('</div>', unsafe_allow_html=True)
+

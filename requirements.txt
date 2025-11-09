@@ -2,13 +2,14 @@
 streamlit==1.39.0
 plotly==5.24.1
 
-# --- Data handling (match your current env) ---
+# --- Data handling ---
 pandas==2.3.3
 numpy==1.26.4
+
 openpyxl==3.1.5
 xlrd==2.0.1
 
-# --- ML (for the linear regression forecast) ---
+# --- ML ---
 scikit-learn==1.5.2
 
 # --- Export images / PDF / PPTX ---
@@ -17,13 +18,14 @@ reportlab==4.4.4
 python-pptx==1.0.2
 Pillow==10.4.0
 
-# --- Arabic shaping (RTL in PDF) ---
+# --- Arabic shaping (RTL) ---
 arabic-reshaper==3.0.0
 python-bidi==0.6.7
 
 # --- Utilities ---
 requests==2.32.3
-
-# --- Postgres / PGVector (binary wheels for Windows + Py3.13) ---
 psycopg[binary]==3.2.12
 
+# --- WordCloud stack (متوافق مع Python 3.12) ---
+matplotlib==3.8.4
+wordcloud==1.9.3.post1
