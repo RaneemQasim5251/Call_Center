@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 import arabic_reshaper
 from bidi.algorithm import get_display
+from datetime import timedelta
 
 
 # ========== (إضافة جديدة) سكikit-learn اختياري للتنبؤ ==========
