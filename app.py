@@ -12,7 +12,7 @@ from bidi.algorithm import get_display
 from datetime import timedelta
 
 
-# ========== (إضافة جديدة) سكikit-learn اختياري للتنبؤ ==========
+# ========== (إضافة جديدة) سكikit-leارن اختياري للتنبؤ ==========
 _SK_OK = True
 try:
     from sklearn.linear_model import LinearRegression
@@ -380,15 +380,19 @@ def load_all():
         fpath = os.path.join(DATA_DIR, fname)
         
         try:
-            df = pd.read_csv(fpath, encoding="utf-8-sig")
+            df = pd.read_csv(fpath, encoding="utf-8-sig", engine="python", on_bad_lines="skip")
         except:
             try:
-                df = pd.read_csv(fpath, encoding="latin1")
+                df = pd.read_csv(fpath, encoding="latin1", engine="python", on_bad_lines="skip")
             except Exception as e:
                 st.warning(f"فشل تحميل {fname}: {str(e)}")
                 continue
         
-        # توحيد الأعمدة
+        if df.empty:
+            continue
+        
+        # نظافة أساسية
+        df.dropna(how="all", inplace=True)
         df = normalize_columns(df)
         df = coerce_datetime_columns(df)
         
