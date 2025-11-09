@@ -501,7 +501,7 @@ with st.form("main_filters"):
         else:
             # استخراج رمز الشهر من النص (مثل "أغسطس (Aug)" -> "Aug")
             month_choice = month_choice_display.split("(")[-1].replace(")", "").strip() if "(" in month_choice_display else month_choice_display
-        st.caption("💡 كل شهر له أسابيع منفصلة. يُفضل اختيار شهر أولاً لتصفية الأسابيع.")
+        st.caption("💡 كل شهر له أسابيع منفصلة. يُفضل اختيار شهر أولاً ثم النقر على زر تطبيق المرشّحات ثم اختيار الأسبوع من قائمة اختر الأسبوع لتصفية الأسابيع.")
         st.markdown('</div>', unsafe_allow_html=True)
 
     with c3:
@@ -995,152 +995,107 @@ st.markdown('</div>', unsafe_allow_html=True)
 
 # =============== Word Cloud — الخدمه المطلوبه ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
-st.markdown("### ☁️ سحابة الكلمات — الخدمه المطلوبه")
-# محاولة إنشاء سحابة الكلمات
+st.markdown("### ☁️ سحابة الكلمات الأكثر تكرارا ")
+
 try:
-    from wordcloud import WordCloud
     import matplotlib
-    matplotlib.use('Agg')  # استخدام backend غير تفاعلي
+    matplotlib.use("Agg")  # Backend غير تفاعلي لستريمليت كلاود
     import matplotlib.pyplot as plt
+    from wordcloud import WordCloud
+    import arabic_reshaper
+    from bidi.algorithm import get_display
     from io import BytesIO
     import base64
-    
+    from collections import Counter
+    import re
+
     if "الخدمه المطلوبه" in filtered.columns and not filtered.empty:
-        # جمع جميع النصوص
-        text_data = filtered["الخدمه المطلوبه"].dropna().astype(str)
-        # تنظيف النصوص وإزالة القيم الفارغة
-        text_list = [t.strip() for t in text_data.tolist() if t.strip() and t.strip() != 'nan']
-        text_clean = " ".join(text_list)
-        
-        if text_clean.strip() and len(text_clean) > 3:
-            # إنشاء سحابة الكلمات مع إعدادات محسّنة للنصوص العربية
-            # استخدام الخط العربي إذا كان متاحاً
-            font_path_to_use = arabic_font_path if arabic_font_path else None
-            
+        # اجمع نصوص العمود ونظّفها
+        text_series = filtered["الخدمه المطلوبه"].dropna().astype(str)
+        text_list = [t.strip() for t in text_series.tolist() if t.strip() and t.strip().lower() != "nan"]
+        text_raw = " ".join(text_list)
+
+        if len(text_raw) > 3:
+            # تهيئة العربية (تشكيـل وربط الحروف + اتجاه العرض)
+            reshaped = arabic_reshaper.reshape(text_raw)
+            bidi_text = get_display(reshaped)
+
+            # حددي خط عربي إن وُجد في assets (تم اكتشافه مسبقًا في arabic_font_path)
+            wc_kwargs = dict(
+                width=1200,
+                height=550,
+                background_color=None,  # شفاف
+                mode="RGBA",
+                max_words=200,
+                prefer_horizontal=0.9,
+                collocations=False,
+                min_font_size=14
+            )
+            if arabic_font_path and os.path.isfile(arabic_font_path):
+                wc_kwargs["font_path"] = arabic_font_path
+
             try:
-                # إنشاء سحابة الكلمات مع الخط العربي
-                wordcloud_params = {
-                    'width': 1000,
-                    'height': 500,
-                    'background_color': None,  # شفاف
-                    'mode': 'RGBA',  # استخدام وضع RGBA للشفافية
-                    'colormap': 'viridis',
-                    'max_words': 150,
-                    'prefer_horizontal': 0.6,
-                    'relative_scaling': 0.4,
-                    'collocation_threshold': 10,
-                    'min_font_size': 15,  # زيادة حجم الخط الأدنى للوضوح
-                    'max_font_size': 120,
-                    'font_step': 2,
-                    'regexp': None,  # استخدام المعالجة الافتراضية
-                    'stopwords': None,  # لا نستخدم stopwords
-                    'normalize_plurals': False
-                }
-                
-                # إضافة مسار الخط إذا كان متاحاً
-                if font_path_to_use and os.path.isfile(font_path_to_use):
-                    wordcloud_params['font_path'] = font_path_to_use
-                    # استخدام الخط العربي لضمان وضوح النص العربي
-                
-                wordcloud = WordCloud(**wordcloud_params).generate(text_clean)
-                
-            except Exception as wc_error:
-                # إذا فشل مع الخط العربي، نجرب بدون خط أو بإعدادات أبسط
-                try:
-                    wordcloud_params_simple = {
-                        'width': 1000,
-                        'height': 500,
-                        'background_color': None,
-                        'mode': 'RGBA',
-                        'colormap': 'viridis',
-                        'max_words': 100,
-                        'min_font_size': 15,
-                        'max_font_size': 100
-                    }
-                    if font_path_to_use and os.path.isfile(font_path_to_use):
-                        wordcloud_params_simple['font_path'] = font_path_to_use
-                    wordcloud = WordCloud(**wordcloud_params_simple).generate(text_clean)
-                except Exception as wc_error2:
-                    # آخر محاولة بدون خط مخصص
-                    wordcloud = WordCloud(
-                        width=1000,
-                        height=500,
-                        background_color=None,
-                        mode='RGBA',
-                        colormap='viridis',
-                        max_words=100
-                    ).generate(text_clean)
-            
-            # إنشاء الصورة مع إعدادات محسّنة للوضوح
-            plt.ioff()  # إيقاف الوضع التفاعلي
-            # زيادة DPI للحصول على صورة أوضح للنص العربي
-            fig, ax = plt.subplots(figsize=(14, 7), facecolor='none', dpi=150)
-            ax.imshow(wordcloud, interpolation='bilinear', aspect='auto')
-            ax.axis('off')
-            ax.set_facecolor('none')
-            fig.patch.set_facecolor('none')
+                wc = WordCloud(**wc_kwargs).generate(bidi_text)
+            except Exception:
+                # محاولة مبسّطة ثانية إذا فشلت الأولى
+                wc = WordCloud(width=1200, height=550, background_color="white", max_words=150).generate(text_raw)
+
+            # ارسم واحفظ للصقّ بالصورة
+            plt.ioff()
+            fig, ax = plt.subplots(figsize=(14, 6), dpi=150, facecolor="none")
+            ax.imshow(wc, interpolation="bilinear")
+            ax.axis("off")
+            fig.patch.set_alpha(0.0)
             plt.tight_layout(pad=0)
-            
-            # حفظ الصورة في buffer بدقة أعلى للوضوح
+
             buf = BytesIO()
-            fig.savefig(buf, format='png', bbox_inches='tight', pad_inches=0, 
-                       facecolor='none', edgecolor='none', transparent=True, dpi=150)
+            fig.savefig(buf, format="png", bbox_inches="tight", pad_inches=0, transparent=True)
             buf.seek(0)
-            
-            # تحويل إلى base64 لعرضها
-            img_str = base64.b64encode(buf.read()).decode()
+            img_b64 = base64.b64encode(buf.read()).decode("utf-8")
+            plt.close(fig); buf.close()
+
             st.markdown(
-                f'<div style="text-align:center; background:transparent;"><img src="data:image/png;base64,{img_str}" style="max-width:100%; height:auto; background:transparent; border-radius:10px;" /></div>',
+                f'<div style="text-align:center;"><img src="data:image/png;base64,{img_b64}" '
+                f'style="max-width:100%;height:auto;border-radius:10px;" /></div>',
                 unsafe_allow_html=True
             )
-            plt.close(fig)
-            buf.close()
         else:
-            st.info("لا توجد بيانات كافية للخدمات المطلوبة ضمن النطاق المحدد.")
+            st.info("لا توجد بيانات كافية في عمود **الخدمه المطلوبه** ضمن النطاق المحدد.")
     else:
-        st.info("لا يتوفر عمود 'الخدمه المطلوبه' في البيانات المصفاة.")
+        st.info("لا يتوفر عمود **الخدمه المطلوبه** في البيانات المصفاة.")
+
 except ImportError:
-    # إذا لم تكن المكتبة متوفرة، نستخدم حل بديل بسيط
+    # بديل نصّي بسيط عند غياب الحزم
     if "الخدمه المطلوبه" in filtered.columns and not filtered.empty:
-        text_data = filtered["الخدمه المطلوبه"].dropna().astype(str)
-        if not text_data.empty:
-            # عرض أكثر الكلمات شيوعاً كبديل
-            from collections import Counter
-            import re
-            all_text = " ".join(text_data.tolist())
-            # تقسيم النص إلى كلمات
-            words = re.findall(r'\b\w+\b', all_text, re.UNICODE)
-            word_counts = Counter(words)
-            top_words = word_counts.most_common(20)
-            
-            if top_words:
-                st.markdown("**أكثر الكلمات شيوعاً:**")
-                words_text = " | ".join([f"**{word}** ({count})" for word, count in top_words[:15]])
-                st.markdown(f'<div style="text-align:center; padding:20px; line-height:2.5;">{words_text}</div>', unsafe_allow_html=True)
-            else:
-                st.info("لا توجد كلمات لعرضها.")
+        all_text = " ".join(filtered["الخدمه المطلوبه"].dropna().astype(str).tolist())
+        words = re.findall(r"\b\w+\b", all_text, re.UNICODE)
+        common = Counter(words).most_common(20)
+        if common:
+            st.markdown("**أكثر الكلمات شيوعًا (بديل عن السحابة):**")
+            st.markdown(" | ".join([f"**{w}** ({c})" for w, c in common]))
         else:
-            st.info("لا توجد بيانات للخدمات المطلوبة ضمن النطاق المحدد.")
+            st.info("لا توجد كلمات لعرضها.")
     else:
-        st.info("لا يتوفر عمود 'الخدمه المطلوبه' في البيانات المصفاة.")
+        st.info("لا يتوفر عمود **الخدمه المطلوبه** في البيانات المصفاة.")
+
 except Exception as e:
-    st.warning(f"تعذّر إنشاء سحابة الكلمات: {str(e)}")
-    # حل بديل: عرض أكثر الكلمات شيوعاً
-    if "الخدمه المطلوبه" in filtered.columns and not filtered.empty:
-        text_data = filtered["الخدمه المطلوبه"].dropna().astype(str)
-        if not text_data.empty:
-            from collections import Counter
-            import re
-            all_text = " ".join(text_data.tolist())
-            words = re.findall(r'\b\w+\b', all_text, re.UNICODE)
-            word_counts = Counter(words)
-            top_words = word_counts.most_common(20)
-            if top_words:
-                st.markdown("**أكثر الكلمات شيوعاً:**")
-                words_text = " | ".join([f"**{word}** ({count})" for word, count in top_words[:15]])
-                st.markdown(f'<div style="text-align:center; padding:20px; line-height:2.5;">{words_text}</div>', unsafe_allow_html=True)
+    st.warning(f"تعذّر إنشاء سحابة الكلمات: {e}")
+    # بديل احتياطي
+    try:
+        from collections import Counter
+        import re
+        if "الخدمه المطلوبه" in filtered.columns and not filtered.empty:
+            all_text = " ".join(filtered["الخدمه المطلوبه"].dropna().astype(str).tolist())
+            words = re.findall(r"\b\w+\b", all_text, re.UNICODE)
+            common = Counter(words).most_common(20)
+            if common:
+                st.markdown("**أكثر الكلمات شيوعًا (بديل عن السحابة):**")
+                st.markdown(" | ".join([f"**{w}** ({c})" for w, c in common]))
+    except Exception:
+        pass
 
 st.markdown('</div>', unsafe_allow_html=True)
+
 
 # =============== جدول التفاصيل + البحث ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
