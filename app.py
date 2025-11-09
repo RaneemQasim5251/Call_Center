@@ -354,127 +354,73 @@ def add_week_columns(d: pd.DataFrame) -> pd.DataFrame:
 
 # =============== تحميل كل CSV مع معالجة الأخطاء ===============
 @st.cache_data(show_spinner=True)
-def load_all(folder="data"):
-    files = sorted(glob.glob(os.path.join(folder, "*.csv")))
+def load_all():
+    """
+    تحميل كل ملفات CSV من مجلد data/
+    """
     datasets = {}
-    for path in files:
-        provider = os.path.splitext(os.path.basename(path))[0].strip()
-
-        df = None
-        err_msg = None
-        for attempt in range(2):
-            try:
-                df = pd.read_csv(
-                    path,
-                    encoding="utf-8-sig",
-                    engine="python",
-                    on_bad_lines="skip",
-                    sep=",",
-                    quotechar='"',
-                    skipinitialspace=True
-                )
-                
-                # التحقق إذا كان الملف يحتوي على header صحيح
-                # إذا كانت أسماء الأعمدة كلها أرقام أو فارغة، فالملف لا يحتوي على header
-                first_row_values = df.iloc[0].values if not df.empty else []
-                col_names = df.columns.tolist()
-                
-                # إذا كانت أسماء الأعمدة كلها أرقام (0, 1, 2, ...) أو كانت القيمة الأولى تبدو كبيانات وليست header
-                is_header_missing = (
-                    all(str(c).isdigit() for c in col_names) or
-                    (len(col_names) > 0 and len(df) > 0 and 
-                     any(str(first_row_values[i]).strip() not in col_names[i] for i in range(min(len(col_names), len(first_row_values))))
-                     and col_names[0] not in ["اسم العميل", "اسم العميل ", "name", "Name"])
-                )
-                
-                # إذا لم يكن هناك header صحيح، نقرأ الملف بدون header ونحدد الأعمدة يدوياً
-                if is_header_missing and len(df.columns) >= 10:
-                    # نقرأ الملف بدون header
-                    df = pd.read_csv(
-                        path,
-                        encoding="utf-8-sig",
-                        engine="python",
-                        on_bad_lines="skip",
-                        sep=",",
-                        quotechar='"',
-                        skipinitialspace=True,
-                        header=None
-                    )
-                    # نحدد أسماء الأعمدة بناءً على البنية المعروفة
-                    expected_cols = ["اسم العميل", "رقم الجوال", "المنطقة", "المدينة", "الشركة", 
-                                   "مقدم الخدمة", "نوع الخدمة", "الخدمه المطلوبه", "المسؤول", 
-                                   "الملاحظات", "الشهر", "التاريخ"]
-                    # نستخدم أسماء الأعمدة المتوقعة حسب عدد الأعمدة الفعلية
-                    if len(df.columns) >= len(expected_cols):
-                        df.columns = expected_cols[:len(df.columns)]
-                    elif len(df.columns) == 12:
-                        df.columns = expected_cols
-                    else:
-                        # إذا كان عدد الأعمدة مختلف، نستخدم الأسماء الأساسية
-                        df.columns = expected_cols[:len(df.columns)] + [f"عمود_{i}" for i in range(len(expected_cols), len(df.columns))]
-                
-                break
-            except Exception as e:
-                err_msg = str(e)
-
-        if df is None:
-            st.error(f"تعذّر قراءة {os.path.basename(path)} — {err_msg}")
-            continue
-
-        if df.empty:
-            st.warning(f"الملف {os.path.basename(path)} فارغ بعد التنظيف.")
-            continue
-
-        # نظافة أساسية
-        df.dropna(how="all", inplace=True)
-        df = normalize_columns(df)
-        df = coerce_datetime_columns(df)  
+    
+    # تحديد مجلد البيانات
+    DATA_DIR = os.path.join(APP_DIR, "data")
+    
+    # التحقق من وجود المجلد
+    if not os.path.exists(DATA_DIR):
+        st.warning(f"مجلد البيانات غير موجود: {DATA_DIR}")
+        return datasets
+    
+    # قراءة جميع ملفات CSV من مجلد data
+    csv_files = [f for f in os.listdir(DATA_DIR) if f.endswith(".csv")]
+    
+    if not csv_files:
+        st.warning(f"لا توجد ملفات CSV في: {DATA_DIR}")
+        return datasets
+    
+    for fname in csv_files:
+        provider = fname.replace(".csv", "").strip()
+        fpath = os.path.join(DATA_DIR, fname)
         
-        # تاريخ موحّد
-        df["التاريخ/Date"] = pd.to_datetime(df.apply(build_date_from_month_day, axis=1), errors="coerce")
-
-        # --- الشهر: توحيد قوي قبل الحصر ---
-        if "الشهر" not in df.columns:
-            # إذا لم يوجد عمود الشهر، نحاول استخراجه من التاريخ
-            df["الشهر"] = df["التاريخ/Date"].dt.month.map(INV_MONTH_MAP).where(
-                df["التاريخ/Date"].dt.month.map(INV_MONTH_MAP).isin(MONTH_ORDER), np.nan
-            )
-        else:
-            # تطبيق التوحيد مع التاريخ (معالجة صحيحة للقيم NaN)
-            month_series = df["الشهر"].copy()
-            date_series = df["التاريخ/Date"]
-            df["الشهر"] = [
-                normalize_month_value(
-                    month_series.iloc[i] if pd.notna(month_series.iloc[i]) else None,
-                    date_series.iloc[i] if pd.notna(date_series.iloc[i]) else pd.NaT
+        try:
+            df = pd.read_csv(fpath, encoding="utf-8-sig")
+        except:
+            try:
+                df = pd.read_csv(fpath, encoding="latin1")
+            except Exception as e:
+                st.warning(f"فشل تحميل {fname}: {str(e)}")
+                continue
+        
+        # توحيد الأعمدة
+        df = normalize_columns(df)
+        df = coerce_datetime_columns(df)
+        
+        # بناء عمود التاريخ إذا لم يكن موجوداً
+        if "التاريخ" not in df.columns:
+            if "الشهر" in df.columns and "اليوم" in df.columns:
+                df["الشهر"] = df.apply(
+                    lambda r: normalize_month_value(r.get("الشهر"), r.get("التاريخ")),
+                    axis=1
                 )
-                for i in range(len(df))
-            ]
-            # التأكد من أن القيم في MONTH_ORDER فقط
-            df["الشهر"] = df["الشهر"].where(df["الشهر"].isin(MONTH_ORDER), np.nan)
-
-        # توحيد النصوص (باستثناء الشهر الذي تم توحيده بالفعل)
-        text_cols = ["اسم العميل","رقم الجوال","المنطقة","المدينة","الشركة","نوع الخدمة","الخدمه المطلوبه"]
-        for col in text_cols:
-            if col in df.columns:
-                df[col] = df[col].astype(str).str.strip()
-        # الشهر: التأكد من أنه نص (لكن نحافظ على NaN كقيمة NaN وليس نص "nan")
-        # لا نحتاج لتحويله لأن normalize_month_value يعطينا القيمة الصحيحة بالفعل
-
+                df["التاريخ"] = df.apply(build_date_from_month_day, axis=1)
+        else:
+            df["التاريخ"] = pd.to_datetime(df["التاريخ"], errors="coerce", format="mixed")
+            if "الشهر" in df.columns:
+                df["الشهر"] = df.apply(
+                    lambda r: normalize_month_value(r.get("الشهر"), r.get("التاريخ")),
+                    axis=1
+                )
+        
         # بناء أسابيع العمل
         df = add_week_columns(df)
-
+        
         # مصدر الملف
         df["مقدم الخدمة (ملف)"] = provider
+        
         datasets[provider] = df
-
-        if err_msg is not None:
-            st.warning(f"تم تخطّي أسطر تالفة في {os.path.basename(path)} للحفاظ على عمل التطبيق.")
-
+    
+    # دمج الكل
     if datasets:
-        all_df = pd.concat(list(datasets.values()), ignore_index=True, sort=False)
-        datasets["__ALL__"] = all_df
-
+        all_data = pd.concat(datasets.values(), ignore_index=True)
+        datasets["__ALL__"] = all_data
+    
     return datasets
 
 datasets = load_all()
