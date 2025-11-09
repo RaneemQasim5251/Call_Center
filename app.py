@@ -219,6 +219,15 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={c: mapping.get(c, c) for c in df.columns})
     return df
 
+def coerce_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
+    """توحيد الأعمدة الزمنية بصيغة datetime لتفادي أخطاء Arrow."""
+    if df is None or df.empty:
+        return df
+    df = df.copy()
+    for col in ["التاريخ", "التاريخ/Date"]:
+        if col in df.columns:
+            df[col] = pd.to_datetime(df[col], errors="coerce")
+    return df
 # =============== بناء التاريخ من (الشهر + اليوم) ===============
 def build_date_from_month_day(row: pd.Series):
     # محاولة قراءة التاريخ مباشرة إذا كان موجوداً بتنسيق تاريخ
@@ -332,7 +341,7 @@ def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
             gg["وسم الأسبوع"] = [label(ws,we) for ws,we in zip(gg["WeekStart"], gg["WeekEnd"])]
             return gg
 
-        d = d.groupby("الشهر", group_keys=False).apply(rank_weeks_in_month)
+        d = d.groupby("الشهر", group_keys=False).apply(rank_weeks_in_month, include_groups=False)
     else:
         d["رقم الأسبوع"]=np.nan; d["وسم الأسبوع"]=""
 
@@ -414,7 +423,8 @@ def load_all(folder="data"):
         # نظافة أساسية
         df.dropna(how="all", inplace=True)
         df = normalize_columns(df)
-
+        df = coerce_datetime_columns(df)  
+        
         # تاريخ موحّد
         df["التاريخ/Date"] = pd.to_datetime(df.apply(build_date_from_month_day, axis=1), errors="coerce")
 
