@@ -287,64 +287,68 @@ def build_date_from_month_day(row: pd.Series):
     return pd.NaT
 
 # =============== أسابيع الأحد→السبت وترقيمها داخل الشهر ===============
-def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty or "التاريخ/Date" not in df.columns:
-        df["ISO_Year"]=np.nan; df["ISO_Week"]=np.nan
-        df["WeekStart"]=pd.NaT; df["WeekEnd"]=pd.NaT
-        df["رقم الأسبوع"]=np.nan; df["وسم الأسبوع"]=""
-        return df
+def add_week_columns(d: pd.DataFrame) -> pd.DataFrame:
+    """
+    بناء أعمدة:
+      - WeekStart, WeekEnd: بداية/نهاية الأسبوع (الأحد-السبت)
+      - رقم الأسبوع: ترتيب الأسبوع داخل الشهر (1,2,3,...)
+      - وسم الأسبوع: نص عربي "أكتوبر - الأسبوع 1 (01/10–07/10)"
+    """
+    if d.empty or "التاريخ" not in d.columns:
+        d["رقم الأسبوع"] = np.nan
+        d["وسم الأسبوع"] = ""
+        return d
 
-    d = df.copy()
-    wd = d["التاريخ/Date"].dt.weekday              # Monday=0..Sunday=6
-    start_offset = (wd + 1) % 7                     # للأحد
-    d["WeekStart"] = d["التاريخ/Date"] - pd.to_timedelta(start_offset, unit="D")
-    d["WeekEnd"]   = d["WeekStart"] + pd.to_timedelta(6, unit="D")  # السبت (أسبوع كامل)
+    d = d.copy()
+    d["التاريخ"] = pd.to_datetime(d["التاريخ"], errors="coerce")
+    d = d.dropna(subset=["التاريخ"])
+    if d.empty:
+        d["رقم الأسبوع"] = np.nan
+        d["وسم الأسبوع"] = ""
+        return d
 
-    d["ISO_Year"]  = d["WeekStart"].dt.isocalendar().year
-    d["ISO_Week"]  = d["WeekStart"].dt.isocalendar().week
+    def week_sun_sat(dt):
+        wd = dt.weekday()
+        if wd == 6:
+            start = dt
+        else:
+            start = dt - timedelta(days=wd + 1)
+        end = start + timedelta(days=6)
+        return start, end
+
+    d[["WeekStart", "WeekEnd"]] = d["التاريخ"].apply(
+        lambda x: pd.Series(week_sun_sat(x))
+    )
 
     if "الشهر" in d.columns:
         def rank_weeks_in_month(g):
-            mnum = MONTH_MAP.get(g.name, None)
-            if not mnum:
-                gg=g.copy(); gg["رقم الأسبوع"]=np.nan; gg["وسم الأسبوع"]=""
-                return gg
-
-            year = 2025
-            month_start = pd.Timestamp(year=year, month=mnum, day=1)
-            next_month = mnum + 1 if mnum < 12 else 1
-            next_year  = year + 1 if mnum == 12 else year
-            month_end  = pd.Timestamp(year=next_year, month=next_month, day=1) - pd.Timedelta(days=1)
-
-            weeks = (
-                g.dropna(subset=["WeekStart","WeekEnd"])
-                 .loc[
-                  ((g["WeekStart"]>=month_start)&(g["WeekStart"]<=month_end)) |
-                  ((g["WeekEnd"]  >=month_start)&(g["WeekEnd"]  <=month_end))
-                 , ["WeekStart","WeekEnd"]]
-                 .drop_duplicates()
-                 .sort_values("WeekStart")
-                 .reset_index(drop=True)
-            )
-            weeks["rank"] = range(1, len(weeks)+1)
-            rank_map = {ws:int(r) for ws,r in zip(weeks["WeekStart"], weeks["rank"])}
-
-            def label(ws,we):
-                if pd.isna(ws) or pd.isna(we): return ""
+            if g.empty:
+                return g
+            
+            unique = g[["WeekStart", "WeekEnd"]].drop_duplicates().sort_values("WeekStart")
+            rank_map = {ws: i+1 for i, (ws, we) in enumerate(zip(unique["WeekStart"], unique["WeekEnd"]))}
+            
+            def label(ws, we):
                 r = rank_map.get(ws, np.nan)
-                # إضافة اسم الشهر للوضوح - كل شهر له ترقيم منفصل
+                # إصلاح: التحقق من NaN قبل التحويل
+                if pd.isna(r):
+                    week_num = "؟"
+                else:
+                    week_num = int(r)
+                
                 month_name_ar = MONTH_AR.get(g.name, g.name)
-                return f"{month_name_ar} - الأسبوع {int(r)} ({ws.strftime('%d/%m')}–{we.strftime('%d/%m')})"
-
+                return f"{month_name_ar} - الأسبوع {week_num} ({ws.strftime('%d/%m')}–{we.strftime('%d/%m')})"
+            
             gg = g.copy()
-            gg["رقم الأسبوع"] = gg["WeekStart"].map(rank_map).astype("float")
-            gg["وسم الأسبوع"] = [label(ws,we) for ws,we in zip(gg["WeekStart"], gg["WeekEnd"])]
+            gg["رقم الأسبوع"] = gg["WeekStart"].map(rank_map).astype("Int64")
+            gg["وسم الأسبوع"] = [label(ws, we) for ws, we in zip(gg["WeekStart"], gg["WeekEnd"])]
             return gg
-
+        
         d = d.groupby("الشهر", group_keys=False).apply(rank_weeks_in_month, include_groups=False)
     else:
-        d["رقم الأسبوع"]=np.nan; d["وسم الأسبوع"]=""
-
+        d["رقم الأسبوع"] = np.nan
+        d["وسم الأسبوع"] = ""
+    
     return d
 
 # =============== تحميل كل CSV مع معالجة الأخطاء ===============
