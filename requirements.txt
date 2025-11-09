@@ -28,4 +28,4 @@ psycopg[binary]==3.2.12
 
 # --- WordCloud stack (متوافق مع Python 3.12) ---
 matplotlib==3.8.4
-wordcloud==1.9.3.post1
+wordcloud==1.9.4
