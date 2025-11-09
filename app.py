@@ -9,10 +9,9 @@ import matplotlib.pyplot as plt
 from wordcloud import WordCloud
 import arabic_reshaper
 from bidi.algorithm import get_display
-from datetime import timedelta
 
 
-# ========== (إضافة جديدة) سكikit-leارن اختياري للتنبؤ ==========
+# ========== (إضافة جديدة) سكikit-learn اختياري للتنبؤ ==========
 _SK_OK = True
 try:
     from sklearn.linear_model import LinearRegression
@@ -63,6 +62,11 @@ def get_arabic_font_path():
 arabic_font_path = get_arabic_font_path()
 
 st.set_page_config(page_title="تقرير قسم خدمة العملاء 2025", page_icon="📞", layout="wide")
+
+if "figures" not in st.session_state:
+    st.session_state["figures"] = {}
+figures = st.session_state["figures"]
+
 
 DARK_GLASS_CSS = """
 <style>
@@ -220,15 +224,6 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={c: mapping.get(c, c) for c in df.columns})
     return df
 
-def coerce_datetime_columns(df: pd.DataFrame) -> pd.DataFrame:
-    """توحيد الأعمدة الزمنية بصيغة datetime لتفادي أخطاء Arrow."""
-    if df is None or df.empty:
-        return df
-    df = df.copy()
-    for col in ["التاريخ", "التاريخ/Date"]:
-        if col in df.columns:
-            df[col] = pd.to_datetime(df[col], errors="coerce")
-    return df
 # =============== بناء التاريخ من (الشهر + اليوم) ===============
 def build_date_from_month_day(row: pd.Series):
     # محاولة قراءة التاريخ مباشرة إذا كان موجوداً بتنسيق تاريخ
@@ -288,143 +283,188 @@ def build_date_from_month_day(row: pd.Series):
     return pd.NaT
 
 # =============== أسابيع الأحد→السبت وترقيمها داخل الشهر ===============
-def add_week_columns(d: pd.DataFrame) -> pd.DataFrame:
-    """
-    بناء أعمدة:
-      - WeekStart, WeekEnd: بداية/نهاية الأسبوع (الأحد-السبت)
-      - رقم الأسبوع: ترتيب الأسبوع داخل الشهر (1,2,3,...)
-      - وسم الأسبوع: نص عربي "أكتوبر - الأسبوع 1 (01/10–07/10)"
-    """
-    if d.empty or "التاريخ" not in d.columns:
-        d["رقم الأسبوع"] = np.nan
-        d["وسم الأسبوع"] = ""
-        return d
+def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
+    if df.empty or "التاريخ/Date" not in df.columns:
+        df["ISO_Year"]=np.nan; df["ISO_Week"]=np.nan
+        df["WeekStart"]=pd.NaT; df["WeekEnd"]=pd.NaT
+        df["رقم الأسبوع"]=np.nan; df["وسم الأسبوع"]=""
+        return df
 
-    d = d.copy()
-    d["التاريخ"] = pd.to_datetime(d["التاريخ"], errors="coerce")
-    d = d.dropna(subset=["التاريخ"])
-    if d.empty:
-        d["رقم الأسبوع"] = np.nan
-        d["وسم الأسبوع"] = ""
-        return d
+    d = df.copy()
+    wd = d["التاريخ/Date"].dt.weekday              # Monday=0..Sunday=6
+    start_offset = (wd + 1) % 7                     # للأحد
+    d["WeekStart"] = d["التاريخ/Date"] - pd.to_timedelta(start_offset, unit="D")
+    d["WeekEnd"]   = d["WeekStart"] + pd.to_timedelta(6, unit="D")  # السبت (أسبوع كامل)
 
-    def week_sun_sat(dt):
-        wd = dt.weekday()
-        if wd == 6:
-            start = dt
-        else:
-            start = dt - timedelta(days=wd + 1)
-        end = start + timedelta(days=6)
-        return start, end
-
-    d[["WeekStart", "WeekEnd"]] = d["التاريخ"].apply(
-        lambda x: pd.Series(week_sun_sat(x))
-    )
+    d["ISO_Year"]  = d["WeekStart"].dt.isocalendar().year
+    d["ISO_Week"]  = d["WeekStart"].dt.isocalendar().week
 
     if "الشهر" in d.columns:
         def rank_weeks_in_month(g):
-            if g.empty:
-                return g
-            
-            unique = g[["WeekStart", "WeekEnd"]].drop_duplicates().sort_values("WeekStart")
-            rank_map = {ws: i+1 for i, (ws, we) in enumerate(zip(unique["WeekStart"], unique["WeekEnd"]))}
-            
-            def label(ws, we):
+            mnum = MONTH_MAP.get(g.name, None)
+            if not mnum:
+                gg=g.copy(); gg["رقم الأسبوع"]=np.nan; gg["وسم الأسبوع"]=""
+                return gg
+
+            year = 2025
+            month_start = pd.Timestamp(year=year, month=mnum, day=1)
+            next_month = mnum + 1 if mnum < 12 else 1
+            next_year  = year + 1 if mnum == 12 else year
+            month_end  = pd.Timestamp(year=next_year, month=next_month, day=1) - pd.Timedelta(days=1)
+
+            weeks = (
+                g.dropna(subset=["WeekStart","WeekEnd"])
+                 .loc[
+                  ((g["WeekStart"]>=month_start)&(g["WeekStart"]<=month_end)) |
+                  ((g["WeekEnd"]  >=month_start)&(g["WeekEnd"]  <=month_end))
+                 , ["WeekStart","WeekEnd"]]
+                 .drop_duplicates()
+                 .sort_values("WeekStart")
+                 .reset_index(drop=True)
+            )
+            weeks["rank"] = range(1, len(weeks)+1)
+            rank_map = {ws:int(r) for ws,r in zip(weeks["WeekStart"], weeks["rank"])}
+
+            def label(ws,we):
+                if pd.isna(ws) or pd.isna(we): return ""
                 r = rank_map.get(ws, np.nan)
-                # إصلاح: التحقق من NaN قبل التحويل
-                if pd.isna(r):
-                    week_num = "؟"
-                else:
-                    week_num = int(r)
-                
+                # إضافة اسم الشهر للوضوح - كل شهر له ترقيم منفصل
                 month_name_ar = MONTH_AR.get(g.name, g.name)
-                return f"{month_name_ar} - الأسبوع {week_num} ({ws.strftime('%d/%m')}–{we.strftime('%d/%m')})"
-            
+                return f"{month_name_ar} - الأسبوع {int(r)} ({ws.strftime('%d/%m')}–{we.strftime('%d/%m')})"
+
             gg = g.copy()
-            gg["رقم الأسبوع"] = gg["WeekStart"].map(rank_map).astype("Int64")
-            gg["وسم الأسبوع"] = [label(ws, we) for ws, we in zip(gg["WeekStart"], gg["WeekEnd"])]
+            gg["رقم الأسبوع"] = gg["WeekStart"].map(rank_map).astype("float")
+            gg["وسم الأسبوع"] = [label(ws,we) for ws,we in zip(gg["WeekStart"], gg["WeekEnd"])]
             return gg
-        
-        d = d.groupby("الشهر", group_keys=False).apply(rank_weeks_in_month, include_groups=False)
+
+        d = d.groupby("الشهر", group_keys=False).apply(rank_weeks_in_month)
     else:
-        d["رقم الأسبوع"] = np.nan
-        d["وسم الأسبوع"] = ""
-    
+        d["رقم الأسبوع"]=np.nan; d["وسم الأسبوع"]=""
+
     return d
 
 # =============== تحميل كل CSV مع معالجة الأخطاء ===============
 @st.cache_data(show_spinner=True)
-def load_all():
-    """
-    تحميل كل ملفات CSV من مجلد data/
-    """
+def load_all(folder="data"):
+    files = sorted(glob.glob(os.path.join(folder, "*.csv")))
     datasets = {}
-    
-    # تحديد مجلد البيانات
-    DATA_DIR = os.path.join(APP_DIR, "data")
-    
-    # التحقق من وجود المجلد
-    if not os.path.exists(DATA_DIR):
-        st.warning(f"مجلد البيانات غير موجود: {DATA_DIR}")
-        return datasets
-    
-    # قراءة جميع ملفات CSV من مجلد data
-    csv_files = [f for f in os.listdir(DATA_DIR) if f.endswith(".csv")]
-    
-    if not csv_files:
-        st.warning(f"لا توجد ملفات CSV في: {DATA_DIR}")
-        return datasets
-    
-    for fname in csv_files:
-        provider = fname.replace(".csv", "").strip()
-        fpath = os.path.join(DATA_DIR, fname)
-        
-        try:
-            df = pd.read_csv(fpath, encoding="utf-8-sig", engine="python", on_bad_lines="skip")
-        except:
+    for path in files:
+        provider = os.path.splitext(os.path.basename(path))[0].strip()
+
+        df = None
+        err_msg = None
+        for attempt in range(2):
             try:
-                df = pd.read_csv(fpath, encoding="latin1", engine="python", on_bad_lines="skip")
+                df = pd.read_csv(
+                    path,
+                    encoding="utf-8-sig",
+                    engine="python",
+                    on_bad_lines="skip",
+                    sep=",",
+                    quotechar='"',
+                    skipinitialspace=True
+                )
+                
+                # التحقق إذا كان الملف يحتوي على header صحيح
+                # إذا كانت أسماء الأعمدة كلها أرقام أو فارغة، فالملف لا يحتوي على header
+                first_row_values = df.iloc[0].values if not df.empty else []
+                col_names = df.columns.tolist()
+                
+                # إذا كانت أسماء الأعمدة كلها أرقام (0, 1, 2, ...) أو كانت القيمة الأولى تبدو كبيانات وليست header
+                is_header_missing = (
+                    all(str(c).isdigit() for c in col_names) or
+                    (len(col_names) > 0 and len(df) > 0 and 
+                     any(str(first_row_values[i]).strip() not in col_names[i] for i in range(min(len(col_names), len(first_row_values))))
+                     and col_names[0] not in ["اسم العميل", "اسم العميل ", "name", "Name"])
+                )
+                
+                # إذا لم يكن هناك header صحيح، نقرأ الملف بدون header ونحدد الأعمدة يدوياً
+                if is_header_missing and len(df.columns) >= 10:
+                    # نقرأ الملف بدون header
+                    df = pd.read_csv(
+                        path,
+                        encoding="utf-8-sig",
+                        engine="python",
+                        on_bad_lines="skip",
+                        sep=",",
+                        quotechar='"',
+                        skipinitialspace=True,
+                        header=None
+                    )
+                    # نحدد أسماء الأعمدة بناءً على البنية المعروفة
+                    expected_cols = ["اسم العميل", "رقم الجوال", "المنطقة", "المدينة", "الشركة", 
+                                   "مقدم الخدمة", "نوع الخدمة", "الخدمه المطلوبه", "المسؤول", 
+                                   "الملاحظات", "الشهر", "التاريخ"]
+                    # نستخدم أسماء الأعمدة المتوقعة حسب عدد الأعمدة الفعلية
+                    if len(df.columns) >= len(expected_cols):
+                        df.columns = expected_cols[:len(df.columns)]
+                    elif len(df.columns) == 12:
+                        df.columns = expected_cols
+                    else:
+                        # إذا كان عدد الأعمدة مختلف، نستخدم الأسماء الأساسية
+                        df.columns = expected_cols[:len(df.columns)] + [f"عمود_{i}" for i in range(len(expected_cols), len(df.columns))]
+                
+                break
             except Exception as e:
-                st.warning(f"فشل تحميل {fname}: {str(e)}")
-                continue
-        
-        if df.empty:
+                err_msg = str(e)
+
+        if df is None:
+            st.error(f"تعذّر قراءة {os.path.basename(path)} — {err_msg}")
             continue
-        
+
+        if df.empty:
+            st.warning(f"الملف {os.path.basename(path)} فارغ بعد التنظيف.")
+            continue
+
         # نظافة أساسية
         df.dropna(how="all", inplace=True)
         df = normalize_columns(df)
-        df = coerce_datetime_columns(df)
-        
-        # بناء عمود التاريخ إذا لم يكن موجوداً
-        if "التاريخ" not in df.columns:
-            if "الشهر" in df.columns and "اليوم" in df.columns:
-                df["الشهر"] = df.apply(
-                    lambda r: normalize_month_value(r.get("الشهر"), r.get("التاريخ")),
-                    axis=1
-                )
-                df["التاريخ"] = df.apply(build_date_from_month_day, axis=1)
+
+        # تاريخ موحّد
+        df["التاريخ/Date"] = pd.to_datetime(df.apply(build_date_from_month_day, axis=1), errors="coerce")
+
+        # --- الشهر: توحيد قوي قبل الحصر ---
+        if "الشهر" not in df.columns:
+            # إذا لم يوجد عمود الشهر، نحاول استخراجه من التاريخ
+            df["الشهر"] = df["التاريخ/Date"].dt.month.map(INV_MONTH_MAP).where(
+                df["التاريخ/Date"].dt.month.map(INV_MONTH_MAP).isin(MONTH_ORDER), np.nan
+            )
         else:
-            df["التاريخ"] = pd.to_datetime(df["التاريخ"], errors="coerce", format="mixed")
-            if "الشهر" in df.columns:
-                df["الشهر"] = df.apply(
-                    lambda r: normalize_month_value(r.get("الشهر"), r.get("التاريخ")),
-                    axis=1
+            # تطبيق التوحيد مع التاريخ (معالجة صحيحة للقيم NaN)
+            month_series = df["الشهر"].copy()
+            date_series = df["التاريخ/Date"]
+            df["الشهر"] = [
+                normalize_month_value(
+                    month_series.iloc[i] if pd.notna(month_series.iloc[i]) else None,
+                    date_series.iloc[i] if pd.notna(date_series.iloc[i]) else pd.NaT
                 )
-        
+                for i in range(len(df))
+            ]
+            # التأكد من أن القيم في MONTH_ORDER فقط
+            df["الشهر"] = df["الشهر"].where(df["الشهر"].isin(MONTH_ORDER), np.nan)
+
+        # توحيد النصوص (باستثناء الشهر الذي تم توحيده بالفعل)
+        text_cols = ["اسم العميل","رقم الجوال","المنطقة","المدينة","الشركة","نوع الخدمة","الخدمه المطلوبه"]
+        for col in text_cols:
+            if col in df.columns:
+                df[col] = df[col].astype(str).str.strip()
+        # الشهر: التأكد من أنه نص (لكن نحافظ على NaN كقيمة NaN وليس نص "nan")
+        # لا نحتاج لتحويله لأن normalize_month_value يعطينا القيمة الصحيحة بالفعل
+
         # بناء أسابيع العمل
         df = add_week_columns(df)
-        
+
         # مصدر الملف
         df["مقدم الخدمة (ملف)"] = provider
-        
         datasets[provider] = df
-    
-    # دمج الكل
+
+        if err_msg is not None:
+            st.warning(f"تم تخطّي أسطر تالفة في {os.path.basename(path)} للحفاظ على عمل التطبيق.")
+
     if datasets:
-        all_data = pd.concat(datasets.values(), ignore_index=True)
-        datasets["__ALL__"] = all_data
-    
+        all_df = pd.concat(list(datasets.values()), ignore_index=True, sort=False)
+        datasets["__ALL__"] = all_df
+
     return datasets
 
 datasets = load_all()
@@ -860,55 +900,81 @@ else:
 
 st.markdown('</div>', unsafe_allow_html=True)
 
-# =============== خريطة (مدن/مناطق) ===============
+# ───────────────────────── Map (static lat/lon) ─────────────────────────
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
 st.markdown("### خريطة الاتصالات حسب المدينة/المنطقة")
+
 CITY_LATLON = {
-    "الرياض": (24.7136, 46.6753), "جدة": (21.4858, 39.1925), "مكة": (21.3891, 39.8579),
-    "المدينة": (24.5247, 39.5692), "الدمام": (26.3927, 49.9777), "الخبر": (26.2794, 50.2083),
-    "الطائف": (21.2703, 40.4158), "أبها": (18.2465, 42.5117), "حائل": (27.5114, 41.7208),
-    "تبوك": (28.3838, 36.5662), "جازان": (16.8892, 42.5700)
+    "الرياض": (24.7136, 46.6753),
+    "جدة": (21.4858, 39.1925),
+    "مكة": (21.3891, 39.8579),
+    "المدينة": (24.5247, 39.5692),
+    "الدمام": (26.3927, 49.9777),
+    "الخبر": (26.2794, 50.2083),
+    "الطائف": (21.2703, 40.4158),
+    "أبها": (18.2465, 42.5117),
+    "حائل": (27.5114, 41.7208),
+    "تبوك": (28.3838, 36.5662),
+    "جازان": (16.8892, 42.5700),
 }
 REGION_LATLON = {
-    "المنطقة الشرقية": (26.5, 49.8), "منطقة الرياض": (24.7, 46.7), "منطقة مكة": (21.4, 40.7),
-    "منطقة المدينة": (24.6, 39.6), "منطقة القصيم": (26.3, 43.96), "منطقة تبوك": (28.4, 36.6),
-    "منطقة حائل": (27.5, 41.7), "منطقة جازان": (16.9, 42.6), "منطقة نجران": (17.6, 44.4),
-    "منطقة عسير": (18.2, 42.5), "منطقة الجوف": (29.97, 40.2), "الحدود الشمالية": (30.0, 41.0),
-    "منطقة الباحة": (20.0, 41.45), "منطقة الطائف": (21.27, 40.42)
+    "المنطقة الشرقية": (26.5, 49.8),
+    "منطقة الرياض": (24.7, 46.7),
+    "منطقة مكة": (21.4, 40.7),
+    "منطقة المدينة": (24.6, 39.6),
+    "منطقة القصيم": (26.3, 43.96),
+    "منطقة تبوك": (28.4, 36.6),
+    "منطقة حائل": (27.5, 41.7),
+    "منطقة جازان": (16.9, 42.6),
+    "منطقة نجران": (17.6, 44.4),
+    "منطقة عسير": (18.2, 42.5),
+    "منطقة الجوف": (29.97, 40.2),
+    "الحدود الشمالية": (30.0, 41.0),
+    "منطقة الباحة": (20.0, 41.45),
+    "منطقة الطائف": (21.27, 40.42),
 }
+
 def build_map_df(df: pd.DataFrame) -> pd.DataFrame:
-    if df.empty: return pd.DataFrame(columns=["label","lat","lon","count"])
+    if df.empty:
+        return pd.DataFrame(columns=["label","lat","lon","count"])
+
     rows = []
-    city_col = "المدينة" if "المدينة" in df.columns else ("المدينه" if "المدينه" in df.columns else None)
+
+    # استخدمي "المدينة" (بعد التوحيد)، وإن ما وجدت ارجعي للاسم القديم احتياطًا
+    city_col = "المدينة" if "المدينة" in df.columns else ("المدينه " if "المدينه " in df.columns else None)
     if city_col:
-        for name, n in df[city_col].value_counts().items():
-            nm = str(name).strip()
-            if nm in CITY_LATLON:
-                lat, lon = CITY_LATLON[nm]
-                rows.append({"label": nm, "lat": lat, "lon": lon, "count": int(n)})
+        vc = df[city_col].astype(str).str.strip().value_counts()
+        for name, n in vc.items():
+            if name in CITY_LATLON:
+                lat, lon = CITY_LATLON[name]
+                rows.append({"label": name, "lat": lat, "lon": lon, "count": int(n)})
+
+    # لو ما فيه مدن مطابقة، جربي على مستوى "المنطقة"
     if not rows and "المنطقة" in df.columns:
-        for name, n in df["المنطقة"].value_counts().items():
-            nm = str(name).strip()
-            if nm in REGION_LATLON:
-                lat, lon = REGION_LATLON[nm]
-                rows.append({"label": nm, "lat": lat, "lon": lon, "count": int(n)})
+        vc = df["المنطقة"].astype(str).str.strip().value_counts()
+        for name, n in vc.items():
+            if name in REGION_LATLON:
+                lat, lon = REGION_LATLON[name]
+                rows.append({"label": name, "lat": lat, "lon": lon, "count": int(n)})
+
     return pd.DataFrame(rows)
 
+# ابنِ الداتا ثم ارسم ثم خزّن
 map_df = build_map_df(filtered)
 if not map_df.empty:
     try:
         # استخدام scatter_geo الذي يعمل بدون الحاجة لـ Mapbox token
         fig_map = px.scatter_geo(
-            map_df, 
-            lat="lat", 
-            lon="lon", 
-            size="count", 
+            map_df,
+            lat="lat",
+            lon="lon",
+            size="count",
             color="count",
-            hover_name="label", 
-            hover_data={"lat":False,"lon":False,"count":True},
+            hover_name="label",
+            hover_data={"lat": False, "lon": False, "count": True},
             size_max=30,
             title="خريطة توزيع الاتصالات",
-            projection="natural earth"
+            projection="natural earth",
         )
         fig_map.update_geos(
             visible=True,
@@ -921,33 +987,38 @@ if not map_df.empty:
             landcolor="rgba(30,30,30,0.5)",
             showocean=True,
             oceancolor="rgba(20,20,20,0.8)",
-            bgcolor="rgba(0,0,0,0)"
+            bgcolor="rgba(0,0,0,0)",
         )
         fig_map.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
-            margin=dict(t=60,b=40,l=10,r=10),
+            margin=dict(t=60, b=40, l=10, r=10),
             template="plotly_dark",
             height=520,
-            geo=dict(
-                center=dict(lat=24, lon=45),  # مركز المملكة العربية السعودية
-                projection_scale=5  # تكبير للتركيز على السعودية
-            )
+            geo=dict(center=dict(lat=24, lon=45), projection_scale=5),  # تركيز على السعودية
         )
         st.plotly_chart(fig_map, use_container_width=True)
     except Exception as e:
-        # إذا فشل scatter_geo، نستخدم scatter_map إذا كان متاحاً
+        # محاولة بديلة بدون Mapbox token
         try:
-            if hasattr(px, 'scatter_map'):
+            if hasattr(px, "scatter_map"):
                 fig_map = px.scatter_map(
-                    map_df, lat="lat", lon="lon", size="count", color="count",
-                    hover_name="label", hover_data={"lat":False,"lon":False,"count":True},
-                    size_max=45, zoom=4.2, height=520, title="خريطة توزيع الاتصالات"
+                    map_df,
+                    lat="lat",
+                    lon="lon",
+                    size="count",
+                    color="count",
+                    hover_name="label",
+                    hover_data={"lat": False, "lon": False, "count": True},
+                    size_max=45,
+                    zoom=4.2,
+                    height=520,
+                    title="خريطة توزيع الاتصالات",
                 )
                 fig_map.update_layout(
                     paper_bgcolor="rgba(0,0,0,0)",
-                    margin=dict(t=60,b=40,l=10,r=10),
-                    template="plotly_dark"
+                    margin=dict(t=60, b=40, l=10, r=10),
+                    template="plotly_dark",
                 )
                 st.plotly_chart(fig_map, use_container_width=True)
             else:
@@ -955,7 +1026,8 @@ if not map_df.empty:
         except Exception as e2:
             st.warning(f"❗ تعذّر رسم الخريطة: {e2}")
 else:
-    st.info("لا توجد إحداثيات مطابقة لأسماء المدن/المناطق ضمن المدى الحالي.")
+    st.info("لا تتوفر بيانات كافية لعرض الخريطة.")
+
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =============== Word Cloud — الخدمه المطلوبه ===============
@@ -1060,8 +1132,6 @@ except Exception as e:
         pass
 
 st.markdown('</div>', unsafe_allow_html=True)
-
-
 # =============== جدول التفاصيل + البحث ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
 st.markdown("### السجل التفصيلي")
