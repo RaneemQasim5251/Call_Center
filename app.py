@@ -542,7 +542,8 @@ with st.form("main_filters"):
 # =============== تطبيق التصفية ===============
 filtered = df_scope.copy()
 if month_choice != "الكل":
-    filtered = filtered[filtered["الشهر"] == month_choice]
+    # نتأكد من تنظيف القيم للمقارنة الصحيحة
+    filtered = filtered[filtered["الشهر"].astype(str).str.strip() == month_choice]
 if week_choice != "الكل" and "وسم الأسبوع" in filtered.columns:
     filtered = filtered[filtered["وسم الأسبوع"] == week_choice]
 
@@ -735,7 +736,7 @@ if agent_col:
 
     # --- 2) شهر Oct (يحترم اختيار مقدّم الخدمة، لا يتأثر بمرشح الشهر/الأسبوع) ---
     with col_oct:
-        df_oct_scope = df_scope[df_scope["الشهر"] == "Oct"].copy() if "الشهر" in df_scope.columns else pd.DataFrame()
+        df_oct_scope = df_scope[df_scope["الشهر"].astype(str).str.strip() == "Oct"].copy() if "الشهر" in df_scope.columns else pd.DataFrame()
         if not df_oct_scope.empty:
             ac_oct = df_oct_scope[agent_col].value_counts()
             if not ac_oct.empty:
@@ -754,7 +755,7 @@ if agent_col:
 
     # --- 3) شهر Nov (يحترم اختيار مقدّم الخدمة، لا يتأثر بمرشح الشهر/الأسبوع) ---
     with col_nov:
-        df_nov_scope = df_scope[df_scope["الشهر"] == "Nov"].copy() if "الشهر" in df_scope.columns else pd.DataFrame()
+        df_nov_scope = df_scope[df_scope["الشهر"].astype(str).str.strip() == "Nov"].copy() if "الشهر" in df_scope.columns else pd.DataFrame()
         if not df_nov_scope.empty:
             ac_nov = df_nov_scope[agent_col].value_counts()
             if not ac_nov.empty:
