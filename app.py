@@ -545,7 +545,7 @@ if month_choice != "الكل":
     # نتأكد من تنظيف القيم للمقارنة الصحيحة
     filtered = filtered[filtered["الشهر"].astype(str).str.strip() == month_choice]
 if week_choice != "الكل" and "وسم الأسبوع" in filtered.columns:
-    filtered = filtered[filtered["وسم الأسبوع"] == week_choice]
+    filtered = filtered[filtered["وسم الأسبوع"].astype(str).str.strip() == week_choice.strip()]
 
 # =============== KPI + المتوسطات الديناميكية ===============
 total_calls = int(len(filtered))
