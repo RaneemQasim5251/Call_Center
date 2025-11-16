@@ -541,11 +541,23 @@ with st.form("main_filters"):
 
 # =============== تطبيق التصفية ===============
 filtered = df_scope.copy()
+
+# Debug: عرض معلومات التصفية
+if provider_choice_ar != "الكل":
+    st.sidebar.write(f"🔍 Debug: Provider = {provider_key}, Records = {len(df_scope)}")
+
 if month_choice != "الكل":
     # نتأكد من تنظيف القيم للمقارنة الصحيحة
+    before_month = len(filtered)
     filtered = filtered[filtered["الشهر"].astype(str).str.strip() == month_choice]
+    st.sidebar.write(f"🔍 Debug: Month = {month_choice}, Before = {before_month}, After = {len(filtered)}")
+
 if week_choice != "الكل" and "وسم الأسبوع" in filtered.columns:
+    before_week = len(filtered)
     filtered = filtered[filtered["وسم الأسبوع"].astype(str).str.strip() == week_choice.strip()]
+    st.sidebar.write(f"🔍 Debug: Week = {week_choice}, Before = {before_week}, After = {len(filtered)}")
+    if len(filtered) > 0:
+        st.sidebar.write(f"✅ Providers in filtered: {filtered['مقدم الخدمة (ملف)'].unique()}")
 
 # =============== KPI + المتوسطات الديناميكية ===============
 total_calls = int(len(filtered))
