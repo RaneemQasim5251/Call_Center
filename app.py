@@ -300,46 +300,48 @@ def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
     d["ISO_Week"]  = d["WeekStart"].dt.isocalendar().week
 
     if "الشهر" in d.columns:
+        # نستخدم التاريخ الفعلي (WeekStart) كـ identifier موحّد بدلاً من ترقيم منفصل لكل مقدم خدمة
+        # هذا يضمن أن نفس الأسبوع له نفس الوسم في جميع الملفات
+        def label_week(ws, we, month):
+            if pd.isna(ws) or pd.isna(we):
+                return ""
+            month_name_ar = MONTH_AR.get(month, month)
+            # نستخدم التاريخ الفعلي للأسبوع كـ identifier
+            return f"{month_name_ar} - الأسبوع ({ws.strftime('%d/%m')}–{we.strftime('%d/%m')})"
+        
+        d["وسم الأسبوع"] = [
+            label_week(ws, we, m) 
+            for ws, we, m in zip(d["WeekStart"], d["WeekEnd"], d["الشهر"])
+        ]
+        
+        # رقم الأسبوع يُحسب بناءً على ترتيب WeekStart داخل كل شهر
+        # لكن الوسم يعتمد على التاريخ الفعلي فقط
         def rank_weeks_in_month(g):
             mnum = MONTH_MAP.get(g.name, None)
             if not mnum:
-                gg=g.copy(); gg["رقم الأسبوع"]=np.nan; gg["وسم الأسبوع"]=""
+                gg = g.copy()
+                gg["رقم الأسبوع"] = np.nan
                 return gg
-
-            year = 2025
-            month_start = pd.Timestamp(year=year, month=mnum, day=1)
-            next_month = mnum + 1 if mnum < 12 else 1
-            next_year  = year + 1 if mnum == 12 else year
-            month_end  = pd.Timestamp(year=next_year, month=next_month, day=1) - pd.Timedelta(days=1)
-
+            
+            # جمع كل الأسابيع الفريدة في هذا الشهر (بناءً على WeekStart)
             weeks = (
-                g.dropna(subset=["WeekStart","WeekEnd"])
-                 .loc[
-                  ((g["WeekStart"]>=month_start)&(g["WeekStart"]<=month_end)) |
-                  ((g["WeekEnd"]  >=month_start)&(g["WeekEnd"]  <=month_end))
-                 , ["WeekStart","WeekEnd"]]
-                 .drop_duplicates()
-                 .sort_values("WeekStart")
-                 .reset_index(drop=True)
+                g.dropna(subset=["WeekStart"])
+                [["WeekStart"]]
+                .drop_duplicates()
+                .sort_values("WeekStart")
+                .reset_index(drop=True)
             )
-            weeks["rank"] = range(1, len(weeks)+1)
-            rank_map = {ws:int(r) for ws,r in zip(weeks["WeekStart"], weeks["rank"])}
-
-            def label(ws,we):
-                if pd.isna(ws) or pd.isna(we): return ""
-                r = rank_map.get(ws, np.nan)
-                # إضافة اسم الشهر للوضوح - كل شهر له ترقيم منفصل
-                month_name_ar = MONTH_AR.get(g.name, g.name)
-                return f"{month_name_ar} - الأسبوع {int(r)} ({ws.strftime('%d/%m')}–{we.strftime('%d/%m')})"
-
+            weeks["rank"] = range(1, len(weeks) + 1)
+            rank_map = {ws: int(r) for ws, r in zip(weeks["WeekStart"], weeks["rank"])}
+            
             gg = g.copy()
             gg["رقم الأسبوع"] = gg["WeekStart"].map(rank_map).astype("float")
-            gg["وسم الأسبوع"] = [label(ws,we) for ws,we in zip(gg["WeekStart"], gg["WeekEnd"])]
             return gg
-
+        
         d = d.groupby("الشهر", group_keys=False).apply(rank_weeks_in_month)
     else:
-        d["رقم الأسبوع"]=np.nan; d["وسم الأسبوع"]=""
+        d["رقم الأسبوع"] = np.nan
+        d["وسم الأسبوع"] = ""
 
     return d
 
@@ -541,23 +543,11 @@ with st.form("main_filters"):
 
 # =============== تطبيق التصفية ===============
 filtered = df_scope.copy()
-
-# Debug: عرض معلومات التصفية
-if provider_choice_ar != "الكل":
-    st.sidebar.write(f"🔍 Debug: Provider = {provider_key}, Records = {len(df_scope)}")
-
 if month_choice != "الكل":
     # نتأكد من تنظيف القيم للمقارنة الصحيحة
-    before_month = len(filtered)
     filtered = filtered[filtered["الشهر"].astype(str).str.strip() == month_choice]
-    st.sidebar.write(f"🔍 Debug: Month = {month_choice}, Before = {before_month}, After = {len(filtered)}")
-
 if week_choice != "الكل" and "وسم الأسبوع" in filtered.columns:
-    before_week = len(filtered)
     filtered = filtered[filtered["وسم الأسبوع"].astype(str).str.strip() == week_choice.strip()]
-    st.sidebar.write(f"🔍 Debug: Week = {week_choice}, Before = {before_week}, After = {len(filtered)}")
-    if len(filtered) > 0:
-        st.sidebar.write(f"✅ Providers in filtered: {filtered['مقدم الخدمة (ملف)'].unique()}")
 
 # =============== KPI + المتوسطات الديناميكية ===============
 total_calls = int(len(filtered))
