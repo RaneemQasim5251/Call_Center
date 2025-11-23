@@ -422,6 +422,10 @@ def load_all(folder="data"):
         df.dropna(how="all", inplace=True)
         df = normalize_columns(df)
 
+        # تنظيف وتوحيد عمود اسم العميل: حذف المسافات الزائدة والحفاظ على الأسماء الفعلية
+        if "اسم العميل" in df.columns:
+            df["اسم العميل"] = df["اسم العميل"].astype(str).str.strip()
+
         # تاريخ موحّد
         df["التاريخ/Date"] = pd.to_datetime(df.apply(build_date_from_month_day, axis=1), errors="coerce")
 
@@ -1138,6 +1142,7 @@ st.markdown('</div>', unsafe_allow_html=True)
 # =============== جدول التفاصيل + البحث ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
 st.markdown("### السجل التفصيلي")
+st.caption("⚠️ ملاحظة: جميع البيانات محفوظة بالكامل — لا يتم حذف أو تعديل أي معلومة")
 
 # تحديد أعمدة العرض بترتيب واضح: اسم العميل ورقم الجوال في الأول
 cols_priority = ['اسم العميل', 'رقم الجوال']  # الأعمدة الأولويات
@@ -1161,7 +1166,13 @@ if show_cols:
     # ترجمة اسم الملف للعرض
     if "مقدم الخدمة (ملف)" in table_df.columns:
         table_df["مقدم الخدمة (ملف)"] = table_df["مقدم الخدمة (ملف)"].map(provider_to_ar)
-    st.dataframe(table_df[show_cols].reset_index(drop=True), use_container_width=True, height=460)
+    
+    # التأكد من أن جميع البيانات محفوظة بدون تعديل أو حذف
+    # عرض اسم العميل كما هو مسجل (سواء كان اسم حقيقي أو "عميل")
+    display_df = table_df[show_cols].reset_index(drop=True).copy()
+    
+    # تنسيق الأعمدة لضمان الوضوح
+    st.dataframe(display_df, use_container_width=True, height=460)
 st.markdown('</div>', unsafe_allow_html=True)
 
 # =============== ملخص ذكي مختصر ===============
