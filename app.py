@@ -346,7 +346,7 @@ def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
     return d
 
 # =============== تحميل كل CSV مع معالجة الأخطاء ===============
-@st.cache_data(show_spinner=True)
+@st.cache_data(show_spinner=True, ttl=60)  # تحديث الـ cache كل 60 ثانية
 def load_all(folder="data"):
     files = sorted(glob.glob(os.path.join(folder, "*.csv")))
     datasets = {}
