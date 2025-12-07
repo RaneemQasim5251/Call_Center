@@ -94,14 +94,14 @@ DESIGN_TOKENS = {
         "accent": "#FF6B9D",
         "success": "#00D9A5",
         "warning": "#FFB800",
-        "bg_primary": "rgba(248, 249, 252, 0.95)",
-        "bg_secondary": "rgba(255, 255, 255, 0.9)",
-        "glass_bg": "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.6))",
-        "glass_border": "rgba(200,200,220,0.3)",
-        "text_primary": "#1A2332",
-        "text_secondary": "#4A5568",
-        "shadow": "0 8px 32px rgba(0, 0, 0, 0.12)",
-        "glow": "0 0 20px rgba(46, 91, 255, 0.2)",
+        "bg_primary": "rgba(255, 255, 255, 0.98)",
+        "bg_secondary": "rgba(248, 250, 252, 0.95)",
+        "glass_bg": "linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,255,0.9))",
+        "glass_border": "rgba(100,120,180,0.2)",
+        "text_primary": "#0F1419",
+        "text_secondary": "#2D3748",
+        "shadow": "0 8px 32px rgba(0, 0, 0, 0.08)",
+        "glow": "0 0 20px rgba(46, 91, 255, 0.15)",
     }
 }
 
