@@ -354,15 +354,44 @@ hr {{
 }}
 
 .stSelectbox > div > div, .stTextInput > div > div {{
-    background: var(--bg-secondary) !important;
+    background: {"#ffffff" if st.session_state["theme_mode"] == "light" else "var(--bg-secondary)"} !important;
     border: 1px solid var(--glass-border) !important;
     border-radius: 12px !important;
     transition: var(--transition) !important;
+    color: {"#0a0e27" if st.session_state["theme_mode"] == "light" else "var(--text-primary)"} !important;
 }}
 
 .stSelectbox > div > div:hover, .stTextInput > div > div:hover {{
     border-color: var(--primary) !important;
     box-shadow: var(--glow) !important;
+}}
+
+/* Dropdown menu items */
+.stSelectbox [data-baseweb="select"] > div {{
+    background: {"#ffffff" if st.session_state["theme_mode"] == "light" else "var(--bg-secondary)"} !important;
+    color: {"#0a0e27" if st.session_state["theme_mode"] == "light" else "var(--text-primary)"} !important;
+}}
+
+/* Dropdown options list */
+[role="listbox"] {{
+    background: {"#ffffff" if st.session_state["theme_mode"] == "light" else "var(--bg-secondary)"} !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 12px !important;
+}}
+
+[role="option"] {{
+    background: {"#ffffff" if st.session_state["theme_mode"] == "light" else "var(--bg-secondary)"} !important;
+    color: {"#0a0e27" if st.session_state["theme_mode"] == "light" else "var(--text-primary)"} !important;
+}}
+
+[role="option"]:hover {{
+    background: {"#f0f0f0" if st.session_state["theme_mode"] == "light" else "rgba(255,255,255,0.1)"} !important;
+    color: {"#0a0e27" if st.session_state["theme_mode"] == "light" else "var(--text-primary)"} !important;
+}}
+
+[role="option"][aria-selected="true"] {{
+    background: {f"var(--primary)" if st.session_state["theme_mode"] == "light" else "var(--primary)"} !important;
+    color: #ffffff !important;
 }}
 
 .stButton > button, button[kind="primary"], button[kind="secondary"], .stFormSubmitButton > button {{
