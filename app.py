@@ -444,42 +444,7 @@ st.markdown(
     unsafe_allow_html=True
 )
 
-# زر الثيم داخل الـ header
-col1, col2 = st.columns([6, 1])
-with col2:
-    if st.button(f"{theme_icon} {theme_text}", key="theme_toggle", use_container_width=True):
-        toggle_theme()
 
-# CSS لتنسيق الزر
-st.markdown("""
-<style>
-/* نقل الزر لداخل الـ header */
-div[data-testid="column"]:has(button[kind="secondary"]) {
-    position: absolute;
-    top: 20px;
-    left: 120px;
-    width: auto !important;
-}
-div[data-testid="column"]:has(button[kind="secondary"]) button {
-    background: var(--glass-bg) !important;
-    border: 1px solid var(--glass-border) !important;
-    backdrop-filter: blur(20px) !important;
-    border-radius: 50px !important;
-    padding: 0.5rem 1rem !important;
-    box-shadow: var(--shadow) !important;
-    font-size: 0.9rem !important;
-    font-weight: 600 !important;
-    color: var(--text-primary) !important;
-    transition: var(--transition) !important;
-    white-space: nowrap !important;
-}
-div[data-testid="column"]:has(button[kind="secondary"]) button:hover {
-    transform: scale(1.05) !important;
-    box-shadow: var(--glow) !important;
-    border-color: var(--primary) !important;
-}
-</style>
-""", unsafe_allow_html=True)
 
 # =============== إعداد الشهور وترجَمات الأسماء ===============
 MONTH_ORDER = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]  # المعتمدة
@@ -833,11 +798,11 @@ if not datasets:
     st.error("لا يوجد أي CSV داخل data/. أضيفي الملفات ثم أعيدي التحميل.")
     st.stop()
 
-# =============== زر تحديث البيانات ===============
+# =============== زر الثيم مكان زر التحديث ===============
 col1, col2, col3 = st.columns([2, 1, 2])
 with col2:
-    if st.button("🔄 حدّث البيانات", use_container_width=True, help="اضغط لإعادة تحميل البيانات من الملفات"):
-        st.rerun()
+    if st.button(f"{theme_icon} {theme_text}", key="theme_toggle", use_container_width=True, help="تبديل بين الوضع النهاري والليلي"):
+        toggle_theme()
 
 # =============== المرشّحات ===============
 providers = [k for k in datasets.keys() if k != "__ALL__"]
