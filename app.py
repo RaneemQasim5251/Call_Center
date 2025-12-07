@@ -440,9 +440,9 @@ if logo_bytes:
 else:
     logo_img_html = '<div class="logo-box"><span style="font-size:26px;">📞</span></div>'
 
-# أيقونات الثيم
-theme_icon = "☀️" if st.session_state["theme_mode"] == "light" else "🌙"
-theme_text = "النهاري" if st.session_state["theme_mode"] == "light" else "الليلي"
+# أيقونات الثيم - يعرض الوضع الذي سيتحول إليه عند الضغط
+theme_icon = "🌙" if st.session_state["theme_mode"] == "light" else "☀️"
+theme_text = "الليلي" if st.session_state["theme_mode"] == "light" else "النهاري"
 
 st.markdown(
     f"""
