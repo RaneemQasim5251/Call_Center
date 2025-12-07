@@ -1484,6 +1484,33 @@ try:
 
             wc_bg = None if st.session_state["theme_mode"] == "dark" else "white"
             
+            # إنشاء دالة لتلوين الكلمات بألوان الثيم
+            from matplotlib.colors import LinearSegmentedColormap
+            
+            if st.session_state["theme_mode"] == "dark":
+                # ألوان الوضع الليلي
+                theme_cmap_colors = [
+                    '#4A90E2',  # primary
+                    '#7B68EE',  # secondary
+                    '#FF6B9D',  # accent
+                    '#4ECDC4',  # success
+                    '#FFD93D',  # warning
+                ]
+            else:
+                # ألوان الوضع النهاري
+                theme_cmap_colors = [
+                    '#2E5BFF',  # primary
+                    '#6C5CE7',  # secondary
+                    '#FF6B9D',  # accent
+                    '#00D9A5',  # success
+                    '#FFB800',  # warning
+                ]
+            
+            # دالة لإرجاع لون عشوائي من ألوان الثيم
+            import random
+            def theme_color_func(word, font_size, position, orientation, random_state=None, **kwargs):
+                return random.choice(theme_cmap_colors)
+            
             wc_kwargs = dict(
                 width=1200,
                 height=550,
@@ -1493,7 +1520,7 @@ try:
                 prefer_horizontal=0.9,
                 collocations=False,
                 min_font_size=14,
-                colormap="viridis" if st.session_state["theme_mode"] == "dark" else "Blues"
+                color_func=theme_color_func
             )
             if arabic_font_path and os.path.isfile(arabic_font_path):
                 wc_kwargs["font_path"] = arabic_font_path
