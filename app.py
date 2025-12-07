@@ -354,9 +354,9 @@ hr {{
 }}
 
 .stButton > button {{
-    background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
-    color: white !important;
-    border: none !important;
+    background: {"linear-gradient(135deg, #2E5BFF, #6C5CE7)" if st.session_state["theme_mode"] == "light" else "linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.1))"} !important;
+    color: {"white" if st.session_state["theme_mode"] == "light" else "var(--text-primary)"} !important;
+    border: {"none" if st.session_state["theme_mode"] == "light" else "1px solid var(--glass-border)"} !important;
     border-radius: 12px !important;
     padding: 0.75rem 2rem !important;
     font-weight: 700 !important;
@@ -367,6 +367,7 @@ hr {{
 .stButton > button:hover {{
     transform: translateY(-2px) !important;
     box-shadow: var(--glow), var(--shadow) !important;
+    background: {"linear-gradient(135deg, #1E4BEF, #5C4CD7)" if st.session_state["theme_mode"] == "light" else "linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.15))"} !important;
 }}
 
 /* Chart containers */
