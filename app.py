@@ -156,16 +156,21 @@ def ar_to_provider(ar_name: str) -> str:
     return rev.get(ar_name, ar_name)
 
 # دالة مساعدة لترجمة أسماء الأشهر
-MONTH_AR = {"Aug": "أغسطس", "Sep": "سبتمبر", "Oct": "أكتوبر", "Nov": "نوفمبر"}
+MONTH_AR = {
+    "Jul": "يوليو", "Aug": "أغسطس", "Sep": "سبتمبر", 
+    "Oct": "أكتوبر", "Nov": "نوفمبر", "Dec": "ديسمبر"
+}
 def month_to_ar(month: str) -> str:
     return MONTH_AR.get(month, month)
 
 # --- توحيد قيم الشهر (Oct/October/أكتوبر… -> Oct) ---
 MONTH_SYNONYMS = {
+    "jul": "Jul", "jul.": "Jul", "july": "Jul", "يوليو": "Jul",
     "aug": "Aug", "aug.": "Aug", "august": "Aug", "أغسطس": "Aug", "اغسطس": "Aug",
     "sep": "Sep", "sep.": "Sep", "september": "Sep", "سبتمبر": "Sep",
     "oct": "Oct", "oct.": "Oct", "october": "Oct", "أكتوبر": "Oct", "اكتوبر": "Oct",
     "nov": "Nov", "nov.": "Nov", "november": "Nov", "نوفمبر": "Nov",
+    "dec": "Dec", "dec.": "Dec", "december": "Dec", "ديسمبر": "Dec",
 }
 def normalize_month_value(val, dt):
     # معالجة القيم الفارغة أو NaN
@@ -184,6 +189,10 @@ def normalize_month_value(val, dt):
             canon = INV_MONTH_MAP.get(mnum)
             return canon if canon and canon in MONTH_ORDER else np.nan
         return np.nan
+    
+    # ✅ أولاً: فحص إذا كانت القيمة موجودة مباشرة في MONTH_ORDER
+    if s in MONTH_ORDER:
+        return s
     
     # البحث في المرادفات (case-insensitive)
     s_lower = s.lower()
