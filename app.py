@@ -63,55 +63,395 @@ arabic_font_path = get_arabic_font_path()
 
 st.set_page_config(page_title="تقرير قسم خدمة العملاء 2025", page_icon="📞", layout="wide")
 
+# =============== Theme State Management ===============
+if "theme_mode" not in st.session_state:
+    st.session_state["theme_mode"] = "dark"
+
 if "figures" not in st.session_state:
     st.session_state["figures"] = {}
 figures = st.session_state["figures"]
 
+# =============== Design System Variables ===============
+DESIGN_TOKENS = {
+    "dark": {
+        "primary": "#4A90E2",
+        "secondary": "#7B68EE",
+        "accent": "#FF6B9D",
+        "success": "#4ECDC4",
+        "warning": "#FFD93D",
+        "bg_primary": "rgba(15, 18, 25, 0.95)",
+        "bg_secondary": "rgba(25, 30, 40, 0.85)",
+        "glass_bg": "linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))",
+        "glass_border": "rgba(255,255,255,0.18)",
+        "text_primary": "#ECF2FF",
+        "text_secondary": "#B8C5D6",
+        "shadow": "0 8px 32px rgba(0, 0, 0, 0.4)",
+        "glow": "0 0 20px rgba(74, 144, 226, 0.3)",
+    },
+    "light": {
+        "primary": "#2E5BFF",
+        "secondary": "#6C5CE7",
+        "accent": "#FF6B9D",
+        "success": "#00D9A5",
+        "warning": "#FFB800",
+        "bg_primary": "rgba(248, 249, 252, 0.95)",
+        "bg_secondary": "rgba(255, 255, 255, 0.9)",
+        "glass_bg": "linear-gradient(135deg, rgba(255,255,255,0.8), rgba(255,255,255,0.6))",
+        "glass_border": "rgba(200,200,220,0.3)",
+        "text_primary": "#1A2332",
+        "text_secondary": "#4A5568",
+        "shadow": "0 8px 32px rgba(0, 0, 0, 0.12)",
+        "glow": "0 0 20px rgba(46, 91, 255, 0.2)",
+    }
+}
 
-DARK_GLASS_CSS = """
+current_theme = DESIGN_TOKENS[st.session_state["theme_mode"]]
+
+# =============== Enhanced CSS with Theme Support ===============
+ENHANCED_CSS = f"""
 <style>
-html, body, [data-testid="stAppViewContainer"], .block-container { direction: rtl; }
-[data-testid="stAppViewContainer"] {
-  background: radial-gradient(1200px 800px at 0% 0%, rgba(40,45,60,0.55) 0%, rgba(15,18,25,0.95) 60%),
-              radial-gradient(1000px 700px at 100% 0%, rgba(30,35,50,0.55) 0%, rgba(15,18,25,0.95) 60%);
-  backdrop-filter: blur(18px);
-}
-.block-container { padding-top: 1.2rem; max-width: 1400px; }
-.glass {
-  background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.03));
-  border: 1px solid rgba(255,255,255,0.12);
-  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
-  backdrop-filter: blur(18px);
-  border-radius: 18px; padding: 1.1rem 1.2rem;
-}
-h1, h2, h3, h4, h5 { color: #ECF2FF !important; letter-spacing: .3px; }
-body, p, div, label, span { color: #E3E9F5 !important; }
-.header-flex { display:flex; align-items:center; justify-content:space-between; padding:.8rem 1rem; margin-bottom:.6rem; }
-.header-left { display:flex; gap:.75rem; align-items:center; flex-direction:row-reverse; }
-.logo-box {
-  width: 84px; height: 84px; border-radius: 18px; overflow:hidden;
-  background:linear-gradient(145deg,#0b1222,#0f172a);
-  display:flex; align-items:center; justify-content:center;
-  box-shadow:0 12px 24px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,255,255,0.06);
-}
-.logo-box img { width:100%; height:100%; object-fit:contain; }
-.kpi {
-  position: relative; border-radius: 18px; padding: 1rem; text-align: center; min-height: 150px;
-  display:flex; flex-direction:column; justify-content:center;
-  background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.03));
-  border: 1px solid rgba(255,255,255,0.14);
-  box-shadow: 0 18px 40px rgba(0,0,0,0.35), inset 0 1px 0 rgba(255,255,255,0.05);
-}
-.kpi .title { color:#9FB3C8; font-size:.95rem; margin-bottom:.35rem; }
-.kpi .value { font-size:2rem; font-weight:800; color:#F5FAFF; line-height:1.15; }
-.badge {
-  display:inline-block; padding:.25rem .55rem; border-radius:999px; font-size:.85rem;
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.16); color: #cfe4ff;
-}
-hr { border:none; height:1px; background:rgba(255,255,255,0.12); margin:12px 0; }
+@import url('https://fonts.googleapis.com/css2?family=Cairo:wght@400;600;700;800&display=swap');
+
+:root {{
+    --primary: {current_theme["primary"]};
+    --secondary: {current_theme["secondary"]};
+    --accent: {current_theme["accent"]};
+    --success: {current_theme["success"]};
+    --warning: {current_theme["warning"]};
+    --bg-primary: {current_theme["bg_primary"]};
+    --bg-secondary: {current_theme["bg_secondary"]};
+    --glass-bg: {current_theme["glass_bg"]};
+    --glass-border: {current_theme["glass_border"]};
+    --text-primary: {current_theme["text_primary"]};
+    --text-secondary: {current_theme["text_secondary"]};
+    --shadow: {current_theme["shadow"]};
+    --glow: {current_theme["glow"]};
+    --border-radius: 20px;
+    --spacing-unit: 1rem;
+    --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}}
+
+html, body, [data-testid="stAppViewContainer"], .block-container {{ 
+    direction: rtl;
+    font-family: 'Cairo', sans-serif;
+}}
+
+[data-testid="stAppViewContainer"] {{
+    background: {"radial-gradient(1200px 800px at 0% 0%, rgba(40,45,60,0.55) 0%, rgba(15,18,25,0.95) 60%), radial-gradient(1000px 700px at 100% 0%, rgba(30,35,50,0.55) 0%, rgba(15,18,25,0.95) 60%)" if st.session_state["theme_mode"] == "dark" else "linear-gradient(135deg, #667eea 0%, #764ba2 100%)"};
+    backdrop-filter: blur(20px);
+    transition: var(--transition);
+}}
+
+.block-container {{ 
+    padding-top: 1.5rem;
+    max-width: 1400px;
+    animation: fadeIn 0.6s ease-out;
+}}
+
+@keyframes fadeIn {{
+    from {{ opacity: 0; transform: translateY(20px); }}
+    to {{ opacity: 1; transform: translateY(0); }}
+}}
+
+@keyframes slideIn {{
+    from {{ transform: translateX(-20px); opacity: 0; }}
+    to {{ transform: translateX(0); opacity: 1; }}
+}}
+
+@keyframes pulse {{
+    0%, 100% {{ transform: scale(1); }}
+    50% {{ transform: scale(1.05); }}
+}}
+
+.glass {{
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(20px) saturate(180%);
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    border-radius: var(--border-radius);
+    padding: calc(var(--spacing-unit) * 1.5);
+    transition: var(--transition);
+    position: relative;
+    overflow: hidden;
+}}
+
+.glass::before {{
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, var(--primary), var(--secondary), var(--accent));
+    opacity: 0;
+    transition: var(--transition);
+}}
+
+.glass:hover {{
+    transform: translateY(-2px);
+    box-shadow: var(--glow), var(--shadow);
+    border-color: var(--primary);
+}}
+
+.glass:hover::before {{
+    opacity: 1;
+}}
+
+h1, h2, h3, h4, h5 {{ 
+    color: var(--text-primary) !important;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: calc(var(--spacing-unit) * 0.75);
+}}
+
+body, p, div, label, span {{ 
+    color: var(--text-secondary) !important;
+}}
+
+.header-flex {{ 
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--spacing-unit);
+    margin-bottom: calc(var(--spacing-unit) * 0.75);
+    animation: slideIn 0.8s ease-out;
+}}
+
+.header-left {{ 
+    display: flex;
+    gap: calc(var(--spacing-unit) * 0.75);
+    align-items: center;
+    flex-direction: row-reverse;
+}}
+
+.logo-box {{
+    width: 90px;
+    height: 90px;
+    border-radius: var(--border-radius);
+    overflow: hidden;
+    background: var(--glass-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.1);
+    border: 2px solid var(--glass-border);
+    transition: var(--transition);
+}}
+
+.logo-box:hover {{
+    transform: scale(1.05) rotate(2deg);
+    box-shadow: var(--glow);
+}}
+
+.logo-box img {{ 
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+}}
+
+.kpi {{
+    position: relative;
+    border-radius: var(--border-radius);
+    padding: calc(var(--spacing-unit) * 1.5);
+    text-align: center;
+    min-height: 170px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    box-shadow: var(--shadow);
+    backdrop-filter: blur(20px);
+    transition: var(--transition);
+    overflow: hidden;
+}}
+
+.kpi::after {{
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle, var(--primary) 0%, transparent 70%);
+    opacity: 0;
+    transition: var(--transition);
+}}
+
+.kpi:hover {{
+    transform: translateY(-5px);
+    box-shadow: var(--glow), var(--shadow);
+    border-color: var(--primary);
+}}
+
+.kpi:hover::after {{
+    opacity: 0.1;
+}}
+
+.kpi .title {{ 
+    color: var(--text-secondary);
+    font-size: 0.95rem;
+    margin-bottom: calc(var(--spacing-unit) * 0.5);
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}}
+
+.kpi .value {{ 
+    font-size: 2.5rem;
+    font-weight: 800;
+    color: var(--text-primary);
+    line-height: 1.2;
+    background: linear-gradient(135deg, var(--primary), var(--secondary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}}
+
+.badge {{
+    display: inline-block;
+    padding: 0.35rem 0.75rem;
+    border-radius: 50px;
+    font-size: 0.85rem;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    color: var(--text-secondary);
+    font-weight: 600;
+    transition: var(--transition);
+}}
+
+.badge:hover {{
+    background: var(--primary);
+    color: white;
+    transform: scale(1.05);
+}}
+
+.theme-toggle {{
+    position: fixed;
+    top: 20px;
+    left: 20px;
+    z-index: 9999;
+    background: var(--glass-bg);
+    border: 1px solid var(--glass-border);
+    backdrop-filter: blur(20px);
+    border-radius: 50px;
+    padding: 0.6rem 1.2rem;
+    cursor: pointer;
+    transition: var(--transition);
+    box-shadow: var(--shadow);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-size: 1.2rem;
+}}
+
+.theme-toggle:hover {{
+    transform: scale(1.05);
+    box-shadow: var(--glow);
+}}
+
+hr {{ 
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--glass-border), transparent);
+    margin: calc(var(--spacing-unit) * 1.5) 0;
+}}
+
+/* Streamlit-specific overrides */
+.stSelectbox, .stTextInput {{
+    background: transparent !important;
+}}
+
+.stSelectbox > div > div, .stTextInput > div > div {{
+    background: var(--bg-secondary) !important;
+    border: 1px solid var(--glass-border) !important;
+    border-radius: 12px !important;
+    transition: var(--transition) !important;
+}}
+
+.stSelectbox > div > div:hover, .stTextInput > div > div:hover {{
+    border-color: var(--primary) !important;
+    box-shadow: var(--glow) !important;
+}}
+
+.stButton > button {{
+    background: linear-gradient(135deg, var(--primary), var(--secondary)) !important;
+    color: white !important;
+    border: none !important;
+    border-radius: 12px !important;
+    padding: 0.75rem 2rem !important;
+    font-weight: 700 !important;
+    transition: var(--transition) !important;
+    box-shadow: var(--shadow) !important;
+}}
+
+.stButton > button:hover {{
+    transform: translateY(-2px) !important;
+    box-shadow: var(--glow), var(--shadow) !important;
+}}
+
+/* Chart containers */
+.js-plotly-plot {{
+    border-radius: var(--border-radius);
+    overflow: hidden;
+}}
+
+/* Dataframe styling */
+.dataframe {{
+    border-radius: var(--border-radius) !important;
+    overflow: hidden !important;
+}}
+
+/* Loading animation */
+.stSpinner > div {{
+    border-color: var(--primary) transparent transparent transparent !important;
+}}
+
+/* Scrollbar styling */
+::-webkit-scrollbar {{
+    width: 10px;
+    height: 10px;
+}}
+
+::-webkit-scrollbar-track {{
+    background: var(--bg-secondary);
+    border-radius: 10px;
+}}
+
+::-webkit-scrollbar-thumb {{
+    background: var(--primary);
+    border-radius: 10px;
+    transition: var(--transition);
+}}
+
+::-webkit-scrollbar-thumb:hover {{
+    background: var(--secondary);
+}}
 </style>
 """
-st.markdown(DARK_GLASS_CSS, unsafe_allow_html=True)
+
+st.markdown(ENHANCED_CSS, unsafe_allow_html=True)
+
+# =============== Theme Toggle Button ===============
+def toggle_theme():
+    st.session_state["theme_mode"] = "light" if st.session_state["theme_mode"] == "dark" else "dark"
+    st.rerun()
+
+theme_icon = "🌙" if st.session_state["theme_mode"] == "light" else "☀️"
+theme_text = "الوضع الداكن" if st.session_state["theme_mode"] == "light" else "الوضع الفاتح"
+
+# Create theme toggle in sidebar
+with st.sidebar:
+    st.markdown(f"""
+    <div style="margin-bottom: 1rem; text-align: center;">
+        <span style="font-size: 1.5rem;">{theme_icon}</span>
+        <p style="font-size: 0.9rem; font-weight: 600; margin-top: 0.5rem;">{theme_text}</p>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    if st.button("تبديل الوضع 🎨", key="theme_btn", use_container_width=True):
+        toggle_theme()
 
 if logo_bytes:
     b64 = base64.b64encode(logo_bytes).decode("utf-8")
@@ -695,26 +1035,28 @@ with c_pred:
 
 st.markdown("<hr>", unsafe_allow_html=True)
 
-# =============== الرسوم ===============
+# =============== الرسوم البيانية مع دعم الثيم ===============
+plotly_template = "plotly_dark" if st.session_state["theme_mode"] == "dark" else "plotly_white"
+
 st.markdown('<div class="glass">', unsafe_allow_html=True)
-st.markdown("### الرسوم")
+st.markdown("### 📊 الرسوم البيانية")
 c1, c2 = st.columns(2)
 with c1:
     if "المنطقة" in filtered.columns and not filtered.empty:
         reg_counts = filtered["المنطقة"].value_counts().reset_index()
         reg_counts.columns = ["المنطقة","العدد"]
         fig_reg = px.bar(reg_counts, x="المنطقة", y="العدد", title="توزيع الاتصالات حسب المنطقة", text="العدد")
-        fig_reg.update_traces(textposition="outside")
-        fig_reg.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+        fig_reg.update_traces(textposition="outside", marker_color=current_theme["primary"])
+        fig_reg.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_reg, use_container_width=True)
     else:
         st.info("لا تتوفر بيانات مناطق ضمن النطاق المحدد.")
 with c2:
     if "نوع الخدمة" in filtered.columns and not filtered.empty:
         tcounts = filtered["نوع الخدمة"].value_counts()
-        fig_type = px.pie(names=tcounts.index, values=tcounts.values, title="نسبة أنواع الاتصالات", hole=0.35)
+        fig_type = px.pie(names=tcounts.index, values=tcounts.values, title="نسبة أنواع الاتصالات", hole=0.4)
         fig_type.update_traces(textposition="inside", textinfo="percent+label")
-        fig_type.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+        fig_type.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_type, use_container_width=True)
     else:
         st.info("لا تتوفر بيانات لأنواع الاتصالات ضمن النطاق المحدد.")
@@ -722,14 +1064,14 @@ if "الشركة" in filtered.columns and not filtered.empty:
     comp_counts = filtered["الشركة"].value_counts().reset_index()
     comp_counts.columns = ["الشركة","العدد"]
     fig_comp = px.bar(comp_counts, x="الشركة", y="العدد", title="عدد الاتصالات حسب الشركة", text="العدد")
-    fig_comp.update_traces(textposition="outside")
-    fig_comp.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+    fig_comp.update_traces(textposition="outside", marker_color=current_theme["secondary"])
+    fig_comp.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig_comp, use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
-# =============== توزيع الاتصالات حسب مقدّم الخدمة (3 Pies) ===============
+# =============== توزيع الاتصالات حسب مقدّم الخدمة (4 رسوم دائرية) ===============
 st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
-st.markdown("### نسبة الاتصالات حسب مقدّم الخدمة")
+st.markdown("### 👥 نسبة الاتصالات حسب مقدّم الخدمة")
 
 agent_col = "مقدم الخدمة (ملف)" if "مقدم الخدمة (ملف)" in df_scope.columns else ("مقدم الخدمة" if "مقدم الخدمة" in df_scope.columns else None)
 
@@ -744,17 +1086,17 @@ if agent_col:
                 names_total = ac_total.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_total.index
                 fig_agents_total = px.pie(
                     names=names_total, values=ac_total.values,
-                    title="إجمالي نسبة الاتصالات (حسب التصفية الحالية)", hole=0.35
+                    title="إجمالي نسبة الاتصالات (حسب التصفية الحالية)", hole=0.4
                 )
                 fig_agents_total.update_traces(textposition="inside", textinfo="percent+label")
-                fig_agents_total.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+                fig_agents_total.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig_agents_total, use_container_width=True)
             else:
                 st.info("لا تتوفر بيانات لمقدّمي الخدمة ضمن التصفية الحالية.")
         else:
             st.info("لا توجد بيانات بعد تطبيق التصفية الحالية.")
 
-    # --- 2) شهر Oct (يحترم اختيار مقدّم الخدمة، لا يتأثر بمرشح الشهر/الأسبوع) ---
+    # --- 2) شهر Oct ---
     with col_oct:
         df_oct_scope = df_scope[df_scope["الشهر"].astype(str).str.strip() == "Oct"].copy() if "الشهر" in df_scope.columns else pd.DataFrame()
         if not df_oct_scope.empty:
@@ -763,17 +1105,17 @@ if agent_col:
                 names_oct = ac_oct.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_oct.index
                 fig_agents_oct = px.pie(
                     names=names_oct, values=ac_oct.values,
-                    title="نسبة الاتصالات — شهر أكتوبر (بنفس نطاق مقدّم الخدمة)", hole=0.35
+                    title="نسبة الاتصالات — شهر أكتوبر", hole=0.4
                 )
                 fig_agents_oct.update_traces(textposition="inside", textinfo="percent+label")
-                fig_agents_oct.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+                fig_agents_oct.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig_agents_oct, use_container_width=True)
             else:
                 st.info("لا توجد بيانات لشهر Oct لنفس نطاق مقدّم الخدمة.")
         else:
             st.info("لا توجد سجلات لشهر Oct في هذا النطاق.")
 
-    # --- 3) شهر Nov (يحترم اختيار مقدّم الخدمة، لا يتأثر بمرشح الشهر/الأسبوع) ---
+    # --- 3) شهر Nov ---
     with col_nov:
         df_nov_scope = df_scope[df_scope["الشهر"].astype(str).str.strip() == "Nov"].copy() if "الشهر" in df_scope.columns else pd.DataFrame()
         if not df_nov_scope.empty:
@@ -782,17 +1124,17 @@ if agent_col:
                 names_nov = ac_nov.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_nov.index
                 fig_agents_nov = px.pie(
                     names=names_nov, values=ac_nov.values,
-                    title="نسبة الاتصالات — شهر نوفمبر (بنفس نطاق مقدّم الخدمة)", hole=0.35
+                    title="نسبة الاتصالات — شهر نوفمبر", hole=0.4
                 )
                 fig_agents_nov.update_traces(textposition="inside", textinfo="percent+label")
-                fig_agents_nov.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+                fig_agents_nov.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig_agents_nov, use_container_width=True)
             else:
                 st.info("لا توجد بيانات لشهر Nov لنفس نطاق مقدّم الخدمة.")
         else:
             st.info("لا توجد سجلات لشهر Nov في هذا النطاق.")
 
-    # --- 4) آخر أسبوع (أحدث WeekStart) ضمن نفس نطاق مقدّم الخدمة ---
+    # --- 4) آخر أسبوع ---
     with col_week:
         if "WeekStart" in df_scope.columns and not df_scope.dropna(subset=["WeekStart"]).empty:
             latest_ws = pd.to_datetime(df_scope["WeekStart"]).max()
@@ -800,15 +1142,14 @@ if agent_col:
             if not df_last_week.empty:
                 ac_week = df_last_week[agent_col].value_counts()
                 names_week = ac_week.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_week.index
-                # عنوان واضح مع نطاق الأسبوع
                 we = pd.to_datetime(df_last_week["WeekEnd"].iloc[0]) if "WeekEnd" in df_last_week.columns else latest_ws + pd.Timedelta(days=6)
                 week_title = f"نسبة الاتصالات — آخر أسبوع ({latest_ws.strftime('%b %d')}–{we.strftime('%b %d')})"
                 fig_agents_week = px.pie(
                     names=names_week, values=ac_week.values,
-                    title=week_title, hole=0.35
+                    title=week_title, hole=0.4
                 )
                 fig_agents_week.update_traces(textposition="inside", textinfo="percent+label")
-                fig_agents_week.update_layout(template="plotly_dark", margin=dict(t=60,b=40,l=20,r=20))
+                fig_agents_week.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig_agents_week, use_container_width=True)
             else:
                 st.info("لا توجد بيانات في آخر أسبوع داخل هذا النطاق.")
@@ -906,9 +1247,13 @@ def forecast_figure(df_month_scope: pd.DataFrame):
 
     fig.update_layout(
         title="منحنى الإجمالي الشهري + التوقع القادم",
-        template="plotly_dark", paper_bgcolor="rgba(0,0,0,0)",
+        template=plotly_template, 
+        paper_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=60, b=40, l=20, r=20),
-        yaxis_title="عدد الاتصالات", xaxis_title="الشهر"
+        yaxis_title="عدد الاتصالات", 
+        xaxis_title="الشهر",
+        showlegend=True,
+        hovermode='x unified'
     )
     return fig
 
@@ -997,6 +1342,9 @@ if not map_df.empty:
             title="خريطة توزيع الاتصالات",
             projection="natural earth",
         )
+        map_bgcolor = "rgba(20,20,20,0.8)" if st.session_state["theme_mode"] == "dark" else "rgba(240,240,240,0.8)"
+        land_color = "rgba(30,30,30,0.5)" if st.session_state["theme_mode"] == "dark" else "rgba(220,220,220,0.5)"
+        
         fig_map.update_geos(
             visible=True,
             resolution=50,
@@ -1005,18 +1353,17 @@ if not map_df.empty:
             showcoastlines=True,
             coastlinecolor="rgba(255,255,255,0.2)",
             showland=True,
-            landcolor="rgba(30,30,30,0.5)",
+            landcolor=land_color,
             showocean=True,
-            oceancolor="rgba(20,20,20,0.8)",
+            oceancolor=map_bgcolor,
             bgcolor="rgba(0,0,0,0)",
         )
         fig_map.update_layout(
             paper_bgcolor="rgba(0,0,0,0)",
             plot_bgcolor="rgba(0,0,0,0)",
             margin=dict(t=60, b=40, l=10, r=10),
-            template="plotly_dark",
             height=520,
-            geo=dict(center=dict(lat=24, lon=45), projection_scale=5),  # تركيز على السعودية
+            geo=dict(center=dict(lat=24, lon=45), projection_scale=5),
         )
         st.plotly_chart(fig_map, use_container_width=True)
     except Exception as e:
@@ -1078,16 +1425,18 @@ try:
             reshaped = arabic_reshaper.reshape(text_raw)
             bidi_text = get_display(reshaped)
 
-            # حددي خط عربي إن وُجد في assets (تم اكتشافه مسبقًا في arabic_font_path)
+            wc_bg = None if st.session_state["theme_mode"] == "dark" else "white"
+            
             wc_kwargs = dict(
                 width=1200,
                 height=550,
-                background_color=None,  # شفاف
+                background_color=wc_bg,
                 mode="RGBA",
                 max_words=200,
                 prefer_horizontal=0.9,
                 collocations=False,
-                min_font_size=14
+                min_font_size=14,
+                colormap="viridis" if st.session_state["theme_mode"] == "dark" else "Blues"
             )
             if arabic_font_path and os.path.isfile(arabic_font_path):
                 wc_kwargs["font_path"] = arabic_font_path
@@ -1095,10 +1444,8 @@ try:
             try:
                 wc = WordCloud(**wc_kwargs).generate(bidi_text)
             except Exception:
-                # محاولة مبسّطة ثانية إذا فشلت الأولى
-                wc = WordCloud(width=1200, height=550, background_color="white", max_words=150).generate(text_raw)
+                wc = WordCloud(width=1200, height=550, background_color=wc_bg, max_words=150).generate(text_raw)
 
-            # ارسم واحفظ للصقّ بالصورة
             plt.ioff()
             fig, ax = plt.subplots(figsize=(14, 6), dpi=150, facecolor="none")
             ax.imshow(wc, interpolation="bilinear")
@@ -1114,7 +1461,7 @@ try:
 
             st.markdown(
                 f'<div style="text-align:center;"><img src="data:image/png;base64,{img_b64}" '
-                f'style="max-width:100%;height:auto;border-radius:10px;" /></div>',
+                f'style="max-width:100%;height:auto;border-radius:12px;box-shadow:{current_theme["shadow"]}" /></div>',
                 unsafe_allow_html=True
             )
         else:
@@ -1201,5 +1548,19 @@ def quick_summary(df: pd.DataFrame) -> str:
         parts.append(f"الشركة الأبرز: **{df['الشركة'].value_counts().idxmax()}**.")
     return " ".join(parts)
 st.write(quick_summary(filtered))
+st.markdown('</div>', unsafe_allow_html=True)
+
+# =============== تذييل مع معلومات إضافية ===============
+st.markdown('<div class="glass" style="margin-top:1.5rem; text-align:center;">', unsafe_allow_html=True)
+st.markdown(f"""
+<div style="padding: 1rem;">
+    <p style="color: {current_theme['text_secondary']}; font-size: 0.9rem; margin: 0;">
+        📊 لوحة تحكم مركز الاتصالات • 2025
+    </p>
+    <p style="color: {current_theme['text_secondary']}; font-size: 0.8rem; margin-top: 0.5rem;">
+        تم التحديث: {pd.Timestamp.now().strftime('%Y-%m-%d %H:%M')}
+    </p>
+</div>
+""", unsafe_allow_html=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
