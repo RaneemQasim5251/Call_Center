@@ -486,13 +486,6 @@ if not datasets:
     st.error("لا يوجد أي CSV داخل data/. أضيفي الملفات ثم أعيدي التحميل.")
     st.stop()
 
-# =============== معلومات التحميل (Debug) ===============
-if "__ALL__" in datasets and "الشهر" in datasets["__ALL__"].columns:
-    all_months = datasets["__ALL__"]["الشهر"].dropna().unique()
-    dec_count = (datasets["__ALL__"]["الشهر"] == "Dec").sum()
-    st.sidebar.success(f"✅ تم التحميل: {len(datasets['__ALL__'])} سجل")
-    st.sidebar.info(f"ديسمبر: {dec_count} سجل")
-
 # =============== زر تحديث البيانات ===============
 col1, col2, col3 = st.columns([2, 1, 2])
 with col2:
