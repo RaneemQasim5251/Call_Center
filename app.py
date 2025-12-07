@@ -87,6 +87,10 @@ DESIGN_TOKENS = {
         "text_secondary": "#B8C5D6",
         "shadow": "0 8px 32px rgba(0, 0, 0, 0.4)",
         "glow": "0 0 20px rgba(74, 144, 226, 0.3)",
+        "button_bg": "linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.1))",
+        "button_bg_hover": "linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.15))",
+        "button_text": "#0a0e27",
+        "button_border": "1px solid rgba(255,255,255,0.18)",
     },
     "light": {
         "primary": "#2E5BFF",
@@ -102,6 +106,10 @@ DESIGN_TOKENS = {
         "text_secondary": "#1A1F36",
         "shadow": "0 4px 20px rgba(0, 0, 0, 0.1)",
         "glow": "0 0 20px rgba(46, 91, 255, 0.25)",
+        "button_bg": "linear-gradient(135deg, #1a1f36, #0a0e27)",
+        "button_bg_hover": "linear-gradient(135deg, #0f1419, #050810)",
+        "button_text": "#ffffff",
+        "button_border": "none",
     }
 }
 
@@ -126,6 +134,10 @@ ENHANCED_CSS = f"""
     --text-secondary: {current_theme["text_secondary"]};
     --shadow: {current_theme["shadow"]};
     --glow: {current_theme["glow"]};
+    --button-bg: {current_theme["button_bg"]};
+    --button-bg-hover: {current_theme["button_bg_hover"]};
+    --button-text: {current_theme["button_text"]};
+    --button-border: {current_theme["button_border"]};
     --border-radius: 20px;
     --spacing-unit: 1rem;
     --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
@@ -353,10 +365,10 @@ hr {{
     box-shadow: var(--glow) !important;
 }}
 
-.stButton > button {{
-    background: {"linear-gradient(135deg, #2E5BFF, #6C5CE7)" if st.session_state["theme_mode"] == "light" else "linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.1))"} !important;
-    color: {"white" if st.session_state["theme_mode"] == "light" else "var(--text-primary)"} !important;
-    border: {"none" if st.session_state["theme_mode"] == "light" else "1px solid var(--glass-border)"} !important;
+.stButton > button, button[kind="primary"], button[kind="secondary"] {{
+    background: var(--button-bg) !important;
+    color: var(--button-text) !important;
+    border: var(--button-border) !important;
     border-radius: 12px !important;
     padding: 0.75rem 2rem !important;
     font-weight: 700 !important;
@@ -364,10 +376,10 @@ hr {{
     box-shadow: var(--shadow) !important;
 }}
 
-.stButton > button:hover {{
+.stButton > button:hover, button[kind="primary"]:hover, button[kind="secondary"]:hover {{
     transform: translateY(-2px) !important;
     box-shadow: var(--glow), var(--shadow) !important;
-    background: {"linear-gradient(135deg, #1E4BEF, #5C4CD7)" if st.session_state["theme_mode"] == "light" else "linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.15))"} !important;
+    background: var(--button-bg-hover) !important;
 }}
 
 /* Chart containers */
