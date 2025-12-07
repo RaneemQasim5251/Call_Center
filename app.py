@@ -242,12 +242,12 @@ body, p, div, label, span {{
     height: 90px;
     border-radius: var(--border-radius);
     overflow: hidden;
-    background: var(--glass-bg);
+    background: {"var(--glass-bg)" if st.session_state["theme_mode"] == "light" else "#ffffff"};
     display: flex;
     align-items: center;
     justify-content: center;
     box-shadow: var(--shadow), inset 0 1px 0 rgba(255,255,255,0.1);
-    border: 2px solid var(--glass-border);
+    border: {"2px solid var(--glass-border)" if st.session_state["theme_mode"] == "light" else "2px solid rgba(0,0,0,0.1)"};
     transition: var(--transition);
 }}
 
