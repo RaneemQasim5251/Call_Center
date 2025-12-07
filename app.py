@@ -135,7 +135,7 @@ st.markdown(
 )
 
 # =============== إعداد الشهور وترجَمات الأسماء ===============
-MONTH_ORDER = ["Aug", "Sep", "Oct", "Nov"]  # المعتمدة الآن
+MONTH_ORDER = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]  # المعتمدة
 MONTH_INDEX = {m:i for i,m in enumerate(MONTH_ORDER)}
 MONTH_MAP = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
 INV_MONTH_MAP = {v:k for k,v in MONTH_MAP.items()}
