@@ -1028,6 +1028,38 @@ st.markdown("<hr>", unsafe_allow_html=True)
 # =============== الرسوم البيانية مع دعم الثيم ===============
 plotly_template = "plotly_dark" if st.session_state["theme_mode"] == "dark" else "plotly_white"
 
+# دالة لتوليد لوحة ألوان متناسقة مع الثيم
+def get_theme_colors():
+    """إرجاع قائمة ألوان متناسقة مع الثيم الحالي"""
+    if st.session_state["theme_mode"] == "dark":
+        return [
+            "#4A90E2",  # primary
+            "#7B68EE",  # secondary
+            "#FF6B9D",  # accent
+            "#4ECDC4",  # success
+            "#FFD93D",  # warning
+            "#9B59B6",  # purple
+            "#3498DB",  # blue
+            "#E74C3C",  # red
+            "#F39C12",  # orange
+            "#1ABC9C",  # turquoise
+        ]
+    else:
+        return [
+            "#2E5BFF",  # primary
+            "#6C5CE7",  # secondary
+            "#FF6B9D",  # accent
+            "#00D9A5",  # success
+            "#FFB800",  # warning
+            "#8E44AD",  # purple
+            "#3498DB",  # blue
+            "#E74C3C",  # red
+            "#F39C12",  # orange
+            "#16A085",  # turquoise
+        ]
+
+theme_colors = get_theme_colors()
+
 st.markdown('<div class="glass">', unsafe_allow_html=True)
 st.markdown("### 📊 الرسوم البيانية")
 c1, c2 = st.columns(2)
@@ -1035,27 +1067,27 @@ with c1:
     if "المنطقة" in filtered.columns and not filtered.empty:
         reg_counts = filtered["المنطقة"].value_counts().reset_index()
         reg_counts.columns = ["المنطقة","العدد"]
-        fig_reg = px.bar(reg_counts, x="المنطقة", y="العدد", title="توزيع الاتصالات حسب المنطقة", text="العدد")
-        fig_reg.update_traces(textposition="outside", marker_color=current_theme["primary"])
-        fig_reg.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
+        fig_reg = px.bar(reg_counts, x="المنطقة", y="العدد", title="توزيع الاتصالات حسب المنطقة", text="العدد", color_discrete_sequence=theme_colors)
+        fig_reg.update_traces(textposition="outside")
+        fig_reg.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_reg, use_container_width=True)
     else:
         st.info("لا تتوفر بيانات مناطق ضمن النطاق المحدد.")
 with c2:
     if "نوع الخدمة" in filtered.columns and not filtered.empty:
         tcounts = filtered["نوع الخدمة"].value_counts()
-        fig_type = px.pie(names=tcounts.index, values=tcounts.values, title="نسبة أنواع الاتصالات", hole=0.4)
+        fig_type = px.pie(names=tcounts.index, values=tcounts.values, title="نسبة أنواع الاتصالات", hole=0.4, color_discrete_sequence=theme_colors)
         fig_type.update_traces(textposition="inside", textinfo="percent+label")
-        fig_type.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
+        fig_type.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
         st.plotly_chart(fig_type, use_container_width=True)
     else:
         st.info("لا تتوفر بيانات لأنواع الاتصالات ضمن النطاق المحدد.")
 if "الشركة" in filtered.columns and not filtered.empty:
     comp_counts = filtered["الشركة"].value_counts().reset_index()
     comp_counts.columns = ["الشركة","العدد"]
-    fig_comp = px.bar(comp_counts, x="الشركة", y="العدد", title="عدد الاتصالات حسب الشركة", text="العدد")
-    fig_comp.update_traces(textposition="outside", marker_color=current_theme["secondary"])
-    fig_comp.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
+    fig_comp = px.bar(comp_counts, x="الشركة", y="العدد", title="عدد الاتصالات حسب الشركة", text="العدد", color_discrete_sequence=theme_colors)
+    fig_comp.update_traces(textposition="outside")
+    fig_comp.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
     st.plotly_chart(fig_comp, use_container_width=True)
 st.markdown('</div>', unsafe_allow_html=True)
 
@@ -1076,10 +1108,11 @@ if agent_col:
                 names_total = ac_total.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_total.index
                 fig_agents_total = px.pie(
                     names=names_total, values=ac_total.values,
-                    title="إجمالي نسبة الاتصالات (حسب التصفية الحالية)", hole=0.4
+                    title="إجمالي نسبة الاتصالات (حسب التصفية الحالية)", hole=0.4,
+                    color_discrete_sequence=theme_colors
                 )
                 fig_agents_total.update_traces(textposition="inside", textinfo="percent+label")
-                fig_agents_total.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
+                fig_agents_total.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig_agents_total, use_container_width=True)
             else:
                 st.info("لا تتوفر بيانات لمقدّمي الخدمة ضمن التصفية الحالية.")
@@ -1095,10 +1128,11 @@ if agent_col:
                 names_oct = ac_oct.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_oct.index
                 fig_agents_oct = px.pie(
                     names=names_oct, values=ac_oct.values,
-                    title="نسبة الاتصالات — شهر أكتوبر", hole=0.4
+                    title="نسبة الاتصالات — شهر أكتوبر", hole=0.4,
+                    color_discrete_sequence=theme_colors
                 )
                 fig_agents_oct.update_traces(textposition="inside", textinfo="percent+label")
-                fig_agents_oct.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
+                fig_agents_oct.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig_agents_oct, use_container_width=True)
             else:
                 st.info("لا توجد بيانات لشهر Oct لنفس نطاق مقدّم الخدمة.")
@@ -1114,10 +1148,11 @@ if agent_col:
                 names_nov = ac_nov.index.map(provider_to_ar) if agent_col == "مقدم الخدمة (ملف)" else ac_nov.index
                 fig_agents_nov = px.pie(
                     names=names_nov, values=ac_nov.values,
-                    title="نسبة الاتصالات — شهر نوفمبر", hole=0.4
+                    title="نسبة الاتصالات — شهر نوفمبر", hole=0.4,
+                    color_discrete_sequence=theme_colors
                 )
                 fig_agents_nov.update_traces(textposition="inside", textinfo="percent+label")
-                fig_agents_nov.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
+                fig_agents_nov.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig_agents_nov, use_container_width=True)
             else:
                 st.info("لا توجد بيانات لشهر Nov لنفس نطاق مقدّم الخدمة.")
@@ -1136,10 +1171,11 @@ if agent_col:
                 week_title = f"نسبة الاتصالات — آخر أسبوع ({latest_ws.strftime('%b %d')}–{we.strftime('%b %d')})"
                 fig_agents_week = px.pie(
                     names=names_week, values=ac_week.values,
-                    title=week_title, hole=0.4
+                    title=week_title, hole=0.4,
+                    color_discrete_sequence=theme_colors
                 )
                 fig_agents_week.update_traces(textposition="inside", textinfo="percent+label")
-                fig_agents_week.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)")
+                fig_agents_week.update_layout(template=plotly_template, margin=dict(t=60,b=40,l=20,r=20), paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
                 st.plotly_chart(fig_agents_week, use_container_width=True)
             else:
                 st.info("لا توجد بيانات في آخر أسبوع داخل هذا النطاق.")
@@ -1182,7 +1218,7 @@ def forecast_figure(df_month_scope: pd.DataFrame):
     # المنحنى الفعلي
     fig.add_trace(go.Scatter(
         x=x_labels_actual, y=y_val, mode="lines+markers", name="فعلي",
-        line=dict(width=3), marker=dict(size=8)
+        line=dict(width=3, color=theme_colors[0]), marker=dict(size=8, color=theme_colors[0])
     ))
 
     # نموذج خطي + نقطة التنبؤ + النطاق التقريبي
@@ -1204,18 +1240,19 @@ def forecast_figure(df_month_scope: pd.DataFrame):
 
         fig.add_trace(go.Scatter(
             x=line_x_full_lbl, y=line_y_full, mode="lines", name="اتجاه",
-            line=dict(dash="dot", width=2)
+            line=dict(dash="dot", width=2, color=theme_colors[1])
         ))
         # نقطة التنبؤ على **Nov** (أو الشهر التالي الفعلي)
         fig.add_trace(go.Scatter(
             x=[next_label], y=[pred], mode="markers+text", name="توقع الشهر القادم",
-            marker=dict(size=12, symbol="diamond"),
+            marker=dict(size=12, symbol="diamond", color=theme_colors[2]),
             text=[f"{int(round(pred))}"], textposition="top center"
         ))
         # عمود النطاق التقريبي على نفس التصنيف (Nov)
+        ci_color = f"rgba({int(theme_colors[3][1:3], 16)},{int(theme_colors[3][3:5], 16)},{int(theme_colors[3][5:7], 16)},0.3)"
         fig.add_trace(go.Scatter(
             x=[next_label, next_label], y=[ci_low, ci_high], mode="lines", name="نطاق تقريبي",
-            line=dict(color="rgba(164,220,255,.6)", width=8)
+            line=dict(color=ci_color, width=8)
         ))
         # نثبت ترتيب المحور السيني لعرض Nov بعد Oct
         fig.update_layout(
@@ -1228,7 +1265,7 @@ def forecast_figure(df_month_scope: pd.DataFrame):
             pred = int(round(y_val[-1] + growth))
             fig.add_trace(go.Scatter(
                 x=[next_label], y=[pred], mode="markers+text", name="توقع مبسّط",
-                marker=dict(size=12, symbol="diamond"),
+                marker=dict(size=12, symbol="diamond", color=theme_colors[2]),
                 text=[str(pred)], textposition="top center"
             ))
             fig.update_layout(
@@ -1239,6 +1276,7 @@ def forecast_figure(df_month_scope: pd.DataFrame):
         title="منحنى الإجمالي الشهري + التوقع القادم",
         template=plotly_template, 
         paper_bgcolor="rgba(0,0,0,0)",
+        plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(t=60, b=40, l=20, r=20),
         yaxis_title="عدد الاتصالات", 
         xaxis_title="الشهر",
