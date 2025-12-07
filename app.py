@@ -411,43 +411,10 @@ hr {{
 
 st.markdown(ENHANCED_CSS, unsafe_allow_html=True)
 
-# =============== Theme Toggle Button ===============
+# =============== Theme Toggle Function ===============
 def toggle_theme():
     st.session_state["theme_mode"] = "light" if st.session_state["theme_mode"] == "dark" else "dark"
     st.rerun()
-
-# أيقونات صحيحة: شمس للنهاري، هلال لليلي
-theme_icon = "☀️" if st.session_state["theme_mode"] == "light" else "🌙"
-theme_text = "النهاري" if st.session_state["theme_mode"] == "light" else "الليلي"
-
-# زر واحد فقط بدون تعقيدات
-if st.button(f"{theme_icon} {theme_text}", key="theme_toggle", help="تبديل بين الوضع النهاري والليلي"):
-    toggle_theme()
-
-# وضع الزر في أعلى اليسار باستخدام CSS
-st.markdown("""
-<style>
-[data-testid="stButton"] button[kind="secondary"] {
-    position: fixed !important;
-    top: 20px !important;
-    left: 20px !important;
-    z-index: 9999 !important;
-    background: var(--glass-bg) !important;
-    border: 1px solid var(--glass-border) !important;
-    backdrop-filter: blur(20px) !important;
-    border-radius: 50px !important;
-    padding: 0.6rem 1.2rem !important;
-    box-shadow: var(--shadow) !important;
-    font-size: 1rem !important;
-    font-weight: 600 !important;
-    color: var(--text-primary) !important;
-}
-[data-testid="stButton"] button[kind="secondary"]:hover {
-    transform: scale(1.05) !important;
-    box-shadow: var(--glow) !important;
-}
-</style>
-""", unsafe_allow_html=True)
 
 if logo_bytes:
     b64 = base64.b64encode(logo_bytes).decode("utf-8")
@@ -455,20 +422,64 @@ if logo_bytes:
 else:
     logo_img_html = '<div class="logo-box"><span style="font-size:26px;">📞</span></div>'
 
+# أيقونات الثيم
+theme_icon = "☀️" if st.session_state["theme_mode"] == "light" else "🌙"
+theme_text = "النهاري" if st.session_state["theme_mode"] == "light" else "الليلي"
+
 st.markdown(
     f"""
     <div class="glass header-flex">
       <div class="header-left">
         <div>
           <h2 style="margin:0;">تقرير قسم خدمة العملاء 2025</h2>
-          <div style="color:#9FB3C8;margin-top:-4px;font-size:.95rem;">عرض تفاعلي للمؤشرات والرسوم والخريطة</div>
+          <div style="color:var(--text-secondary);margin-top:4px;font-size:.95rem;">عرض تفاعلي للمؤشرات والرسوم والخريطة</div>
         </div>
       </div>
-      {logo_img_html}
+      <div style="display:flex;align-items:center;gap:1rem;">
+        <div id="theme-toggle-placeholder"></div>
+        {logo_img_html}
+      </div>
     </div>
     """,
     unsafe_allow_html=True
 )
+
+# زر الثيم داخل الـ header
+col1, col2 = st.columns([6, 1])
+with col2:
+    if st.button(f"{theme_icon} {theme_text}", key="theme_toggle", use_container_width=True):
+        toggle_theme()
+
+# CSS لتنسيق الزر
+st.markdown("""
+<style>
+/* نقل الزر لداخل الـ header */
+div[data-testid="column"]:has(button[kind="secondary"]) {
+    position: absolute;
+    top: 20px;
+    left: 120px;
+    width: auto !important;
+}
+div[data-testid="column"]:has(button[kind="secondary"]) button {
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--glass-border) !important;
+    backdrop-filter: blur(20px) !important;
+    border-radius: 50px !important;
+    padding: 0.5rem 1rem !important;
+    box-shadow: var(--shadow) !important;
+    font-size: 0.9rem !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+    transition: var(--transition) !important;
+    white-space: nowrap !important;
+}
+div[data-testid="column"]:has(button[kind="secondary"]) button:hover {
+    transform: scale(1.05) !important;
+    box-shadow: var(--glow) !important;
+    border-color: var(--primary) !important;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # =============== إعداد الشهور وترجَمات الأسماء ===============
 MONTH_ORDER = ["Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]  # المعتمدة
