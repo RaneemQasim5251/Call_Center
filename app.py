@@ -95,13 +95,13 @@ DESIGN_TOKENS = {
         "success": "#00D9A5",
         "warning": "#FFB800",
         "bg_primary": "rgba(255, 255, 255, 0.98)",
-        "bg_secondary": "rgba(248, 250, 252, 0.95)",
-        "glass_bg": "linear-gradient(135deg, rgba(255,255,255,0.95), rgba(248,250,255,0.9))",
-        "glass_border": "rgba(100,120,180,0.2)",
-        "text_primary": "#0F1419",
-        "text_secondary": "#2D3748",
-        "shadow": "0 8px 32px rgba(0, 0, 0, 0.08)",
-        "glow": "0 0 20px rgba(46, 91, 255, 0.15)",
+        "bg_secondary": "rgba(250, 251, 255, 0.95)",
+        "glass_bg": "linear-gradient(135deg, rgba(255,255,255,0.98), rgba(250,251,255,0.95))",
+        "glass_border": "rgba(100,120,200,0.3)",
+        "text_primary": "#0A0E27",
+        "text_secondary": "#1A1F36",
+        "shadow": "0 4px 20px rgba(0, 0, 0, 0.1)",
+        "glow": "0 0 20px rgba(46, 91, 255, 0.25)",
     }
 }
 
@@ -327,29 +327,7 @@ body, p, div, label, span {{
     transform: scale(1.05);
 }}
 
-.theme-toggle {{
-    position: fixed;
-    top: 20px;
-    left: 20px;
-    z-index: 9999;
-    background: var(--glass-bg);
-    border: 1px solid var(--glass-border);
-    backdrop-filter: blur(20px);
-    border-radius: 50px;
-    padding: 0.6rem 1.2rem;
-    cursor: pointer;
-    transition: var(--transition);
-    box-shadow: var(--shadow);
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-    font-size: 1.2rem;
-}}
 
-.theme-toggle:hover {{
-    transform: scale(1.05);
-    box-shadow: var(--glow);
-}}
 
 hr {{ 
     border: none;
@@ -438,34 +416,37 @@ def toggle_theme():
     st.session_state["theme_mode"] = "light" if st.session_state["theme_mode"] == "dark" else "dark"
     st.rerun()
 
-theme_icon = "🌙" if st.session_state["theme_mode"] == "light" else "☀️"
-theme_text = "الوضع الداكن" if st.session_state["theme_mode"] == "light" else "الوضع الفاتح"
+# أيقونات صحيحة: شمس للنهاري، هلال لليلي
+theme_icon = "☀️" if st.session_state["theme_mode"] == "light" else "🌙"
+theme_text = "النهاري" if st.session_state["theme_mode"] == "light" else "الليلي"
 
-# Create theme toggle button at top left
-st.markdown(f"""
-<div class="theme-toggle" onclick="window.parent.postMessage({{type: 'streamlit:setComponentValue', key: 'theme_toggle', value: true}}, '*')">
-    <span>{theme_icon}</span>
-    <span style="font-size: 0.9rem; font-weight: 600;">{theme_text}</span>
-</div>
-""", unsafe_allow_html=True)
-
-# Hidden button to handle the actual toggle
-if st.button("", key="theme_toggle_hidden", help="Toggle Theme"):
+# زر واحد فقط بدون تعقيدات
+if st.button(f"{theme_icon} {theme_text}", key="theme_toggle", help="تبديل بين الوضع النهاري والليلي"):
     toggle_theme()
 
-# JavaScript to trigger the hidden button when clicking the fixed div
+# وضع الزر في أعلى اليسار باستخدام CSS
 st.markdown("""
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const themeToggle = document.querySelector('.theme-toggle');
-    if (themeToggle) {
-        themeToggle.addEventListener('click', function() {
-            const button = window.parent.document.querySelector('[data-testid="baseButton-secondary"]');
-            if (button) button.click();
-        });
-    }
-});
-</script>
+<style>
+[data-testid="stButton"] button[kind="secondary"] {
+    position: fixed !important;
+    top: 20px !important;
+    left: 20px !important;
+    z-index: 9999 !important;
+    background: var(--glass-bg) !important;
+    border: 1px solid var(--glass-border) !important;
+    backdrop-filter: blur(20px) !important;
+    border-radius: 50px !important;
+    padding: 0.6rem 1.2rem !important;
+    box-shadow: var(--shadow) !important;
+    font-size: 1rem !important;
+    font-weight: 600 !important;
+    color: var(--text-primary) !important;
+}
+[data-testid="stButton"] button[kind="secondary"]:hover {
+    transform: scale(1.05) !important;
+    box-shadow: var(--glow) !important;
+}
+</style>
 """, unsafe_allow_html=True)
 
 if logo_bytes:
