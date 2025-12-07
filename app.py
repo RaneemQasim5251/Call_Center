@@ -366,20 +366,25 @@ hr {{
 }}
 
 .stButton > button, button[kind="primary"], button[kind="secondary"], .stFormSubmitButton > button {{
-    background: {"linear-gradient(135deg, #1a1f36, #0a0e27)" if st.session_state["theme_mode"] == "light" else "linear-gradient(135deg, rgba(255,255,255,0.15), rgba(255,255,255,0.1))"} !important;
-    color: {"#ffffff" if st.session_state["theme_mode"] == "light" else "#0a0e27"} !important;
-    border: {"none" if st.session_state["theme_mode"] == "light" else "1px solid rgba(255,255,255,0.25)"} !important;
+    background: {"#000000" if st.session_state["theme_mode"] == "light" else "rgba(255,255,255,0.2)"} !important;
+    color: {"#FFFFFF" if st.session_state["theme_mode"] == "light" else "#000000"} !important;
+    border: {"none" if st.session_state["theme_mode"] == "light" else "2px solid rgba(255,255,255,0.3)"} !important;
     border-radius: 12px !important;
     padding: 0.75rem 2rem !important;
-    font-weight: 700 !important;
+    font-weight: 800 !important;
+    font-size: 1.05rem !important;
     transition: var(--transition) !important;
     box-shadow: var(--shadow) !important;
+}}
+
+.stButton > button *, button[kind="primary"] *, button[kind="secondary"] *, .stFormSubmitButton > button * {{
+    color: {"#FFFFFF" if st.session_state["theme_mode"] == "light" else "#000000"} !important;
 }}
 
 .stButton > button:hover, button[kind="primary"]:hover, button[kind="secondary"]:hover, .stFormSubmitButton > button:hover {{
     transform: translateY(-2px) !important;
     box-shadow: var(--glow), var(--shadow) !important;
-    background: {"linear-gradient(135deg, #0f1419, #050810)" if st.session_state["theme_mode"] == "light" else "linear-gradient(135deg, rgba(255,255,255,0.25), rgba(255,255,255,0.15))"} !important;
+    background: {"#1a1a1a" if st.session_state["theme_mode"] == "light" else "rgba(255,255,255,0.3)"} !important;
 }}
 
 /* Chart containers */
