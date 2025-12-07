@@ -441,17 +441,32 @@ def toggle_theme():
 theme_icon = "🌙" if st.session_state["theme_mode"] == "light" else "☀️"
 theme_text = "الوضع الداكن" if st.session_state["theme_mode"] == "light" else "الوضع الفاتح"
 
-# Create theme toggle in sidebar
-with st.sidebar:
-    st.markdown(f"""
-    <div style="margin-bottom: 1rem; text-align: center;">
-        <span style="font-size: 1.5rem;">{theme_icon}</span>
-        <p style="font-size: 0.9rem; font-weight: 600; margin-top: 0.5rem;">{theme_text}</p>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    if st.button("تبديل الوضع 🎨", key="theme_btn", use_container_width=True):
-        toggle_theme()
+# Create theme toggle button at top left
+st.markdown(f"""
+<div class="theme-toggle" onclick="window.parent.postMessage({{type: 'streamlit:setComponentValue', key: 'theme_toggle', value: true}}, '*')">
+    <span>{theme_icon}</span>
+    <span style="font-size: 0.9rem; font-weight: 600;">{theme_text}</span>
+</div>
+""", unsafe_allow_html=True)
+
+# Hidden button to handle the actual toggle
+if st.button("", key="theme_toggle_hidden", help="Toggle Theme"):
+    toggle_theme()
+
+# JavaScript to trigger the hidden button when clicking the fixed div
+st.markdown("""
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const themeToggle = document.querySelector('.theme-toggle');
+    if (themeToggle) {
+        themeToggle.addEventListener('click', function() {
+            const button = window.parent.document.querySelector('[data-testid="baseButton-secondary"]');
+            if (button) button.click();
+        });
+    }
+});
+</script>
+""", unsafe_allow_html=True)
 
 if logo_bytes:
     b64 = base64.b64encode(logo_bytes).decode("utf-8")
