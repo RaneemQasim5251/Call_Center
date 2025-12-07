@@ -346,7 +346,7 @@ def add_week_columns(df: pd.DataFrame) -> pd.DataFrame:
     return d
 
 # =============== تحميل كل CSV مع معالجة الأخطاء ===============
-@st.cache_data(show_spinner=True, ttl=60)  # تحديث الـ cache كل 60 ثانية
+@st.cache_data(show_spinner=True, ttl=10)  # تحديث الـ cache كل 10 ثواني
 def load_all(folder="data"):
     files = sorted(glob.glob(os.path.join(folder, "*.csv")))
     datasets = {}
@@ -477,6 +477,13 @@ datasets = load_all()
 if not datasets:
     st.error("لا يوجد أي CSV داخل data/. أضيفي الملفات ثم أعيدي التحميل.")
     st.stop()
+
+# =============== زر تحديث البيانات ===============
+col1, col2, col3 = st.columns([2, 1, 2])
+with col2:
+    if st.button("🔄 حدّث البيانات", use_container_width=True, help="اضغط لإعادة تحميل البيانات من الملفات"):
+        st.cache_data.clear()
+        st.rerun()
 
 # =============== المرشّحات ===============
 providers = [k for k in datasets.keys() if k != "__ALL__"]
