@@ -592,6 +592,151 @@ def normalize_columns(df: pd.DataFrame) -> pd.DataFrame:
     df = df.rename(columns={c: mapping.get(c, c) for c in df.columns})
     return df
 
+# =============== تنظيف وتوحيد البيانات المرفوعة ===============
+def clean_and_standardize_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    تنظيف وتوحيد البيانات المرفوعة:
+    1. تنظيف المسافات الزائدة
+    2. توحيد أسماء الأعمدة
+    3. معالجة صيغ التواريخ المختلفة
+    4. حل الأعمدة المفقودة أو المكررة
+    """
+    if df is None or df.empty:
+        return df
+    
+    # 1. تنظيف المسافات من أسماء الأعمدة
+    df = df.rename(columns=lambda c: str(c).strip())
+    
+    # 2. توحيد أسماء الأعمدة بطريقة مرنة
+    column_mapping = {
+        # الاسم
+        "name": "اسم العميل",
+        "اسم": "اسم العميل",
+        "customer_name": "اسم العميل",
+        "العميل": "اسم العميل",
+        
+        # رقم الجوال
+        "phone": "رقم الجوال",
+        "mobile": "رقم الجوال",
+        "phone_number": "رقم الجوال",
+        "الهاتف": "رقم الجوال",
+        "جوال": "رقم الجوال",
+        
+        # المنطقة
+        "region": "المنطقة",
+        "area": "المنطقة",
+        
+        # المدينة
+        "city": "المدينة",
+        "town": "المدينة",
+        
+        # التاريخ
+        "date": "التاريخ",
+        "التاريخ_date": "التاريخ",
+        
+        # الشهر
+        "month": "الشهر",
+        "الشهر_month": "الشهر",
+    }
+    
+    # تطبيق التعيين بطريقة حساسة للحالة
+    new_columns = {}
+    for col in df.columns:
+        col_lower = col.lower().strip()
+        if col_lower in column_mapping:
+            new_columns[col] = column_mapping[col_lower]
+        elif col in column_mapping:
+            new_columns[col] = column_mapping[col]
+        else:
+            new_columns[col] = col
+    
+    df = df.rename(columns=new_columns)
+    
+    # 3. تنظيف البيانات النصية
+    text_cols = ['اسم العميل', 'رقم الجوال', 'المنطقة', 'المدينة', 'الشركة', 
+                 'نوع الخدمة', 'الخدمه المطلوبه', 'المسؤول', 'الملاحظات']
+    for col in text_cols:
+        if col in df.columns:
+            # تنظيف المسافات والقيم الفارغة
+            df[col] = df[col].astype(str).str.strip()
+            # استبدال "nan" و "None" بـ فارغ
+            df[col] = df[col].replace(['nan', 'None', 'none', ''], None)
+    
+    # 4. معالجة التواريخ بصيغ مختلفة
+    if 'التاريخ' in df.columns:
+        df['التاريخ'] = df['التاريخ'].apply(parse_flexible_date)
+    
+    # 5. توحيد الأشهر
+    if 'الشهر' in df.columns:
+        df['الشهر'] = df['الشهر'].astype(str).apply(normalize_month_string)
+    
+    return df
+
+# =============== معالج مرن لصيغ التواريخ ===============
+def parse_flexible_date(date_val):
+    """معالج مرن للتواريخ بصيغ مختلفة"""
+    if pd.isna(date_val) or str(date_val).strip() in ['', 'nan', 'None']:
+        return pd.NaT
+    
+    date_str = str(date_val).strip()
+    
+    # قائمة صيغ التواريخ المحتملة
+    date_formats = [
+        '%Y-%m-%d',      # 2025-01-07
+        '%d-%m-%Y',      # 07-01-2025
+        '%m-%d-%Y',      # 01-07-2025
+        '%Y/%m/%d',      # 2025/01/07
+        '%d/%m/%Y',      # 07/01/2025
+        '%m/%d/%Y',      # 01/07/2025
+        '%d.%m.%Y',      # 07.01.2025
+        '%Y.%m.%d',      # 2025.01.07
+        '%d-%b-%Y',      # 07-Jan-2025
+        '%d/%b/%Y',      # 07/Jan/2025
+    ]
+    
+    # محاولة كل صيغة
+    for fmt in date_formats:
+        try:
+            return pd.to_datetime(date_str, format=fmt)
+        except:
+            continue
+    
+    # محاولة استخدام to_datetime مع dayfirst=True (آخر محاولة)
+    try:
+        return pd.to_datetime(date_str, dayfirst=True, errors='coerce')
+    except:
+        return pd.NaT
+
+# =============== توحيد اسم الشهر ===============
+def normalize_month_string(month_val):
+    """توحيد أسماء الأشهر من صيغ مختلفة"""
+    if pd.isna(month_val) or str(month_val).strip() in ['', 'nan', 'None']:
+        return None
+    
+    month_str = str(month_val).strip().lower()
+    
+    # معاملة خاصة للأرقام
+    if month_str.isdigit():
+        try:
+            month_num = int(month_str)
+            if 1 <= month_num <= 12:
+                return list(MONTH_MAP.keys())[month_num - 1]
+        except:
+            pass
+    
+    # البحث في المعاجم الموجودة
+    if month_str in MONTH_SYNONYMS:
+        return MONTH_SYNONYMS[month_str]
+    elif month_str in MONTH_MAP:
+        return month_str
+    
+    # محاولة إيجاد مطابقة جزئية
+    for synonym, canonical in MONTH_SYNONYMS.items():
+        if month_str in synonym or synonym in month_str:
+            return canonical
+    
+    return month_str  # إرجاع القيمة الأصلية إذا لم نجد مطابقة
+
 # =============== بناء التاريخ من (الشهر + اليوم) ===============
 def build_date_from_month_day(row: pd.Series):
     # محاولة قراءة التاريخ مباشرة إذا كان موجوداً بتنسيق تاريخ
@@ -1736,15 +1881,18 @@ with excel_col2:
             
             st.success(f"✅ تم قراءة الملف بنجاح! عدد الصفوف: {len(uploaded_df)}")
             
-            # توحيد أسماء الأعمدة
+            # تنظيف وتوحيد البيانات (الخطوة الحاسمة)
+            uploaded_df = clean_and_standardize_data(uploaded_df)
+            
+            # توحيد أسماء الأعمدة (إضافي للتأكد)
             uploaded_df = normalize_columns(uploaded_df)
             
-            # تنسيق التاريخ
-            if "التاريخ/Date" not in uploaded_df.columns and "التاريخ" in uploaded_df.columns:
-                try:
-                    uploaded_df["التاريخ/Date"] = pd.to_datetime(uploaded_df["التاريخ"], errors="coerce")
-                except:
-                    uploaded_df["التاريخ/Date"] = pd.NaT
+            # تنسيق التاريخ (إذا لم يتم في clean_and_standardize_data)
+            if "التاريخ" in uploaded_df.columns:
+                # تطبيق معالجة مرنة للتواريخ
+                uploaded_df["التاريخ/Date"] = uploaded_df["التاريخ"].apply(parse_flexible_date)
+            elif "التاريخ/Date" not in uploaded_df.columns:
+                uploaded_df["التاريخ/Date"] = pd.NaT
             
             # إضافة معلومات مقدم الخدمة
             uploaded_df["مقدم الخدمة (ملف)"] = selected_user
@@ -1752,11 +1900,27 @@ with excel_col2:
             # إضافة أعمدة الأسبوع
             uploaded_df = add_week_columns(uploaded_df)
             
-            # عرض معاينة البيانات
-            st.write("**معاينة البيانات المرفوعة:**")
-            preview_cols = [c for c in ['اسم العميل', 'رقم الجوال', 'المدينة', 'نوع الخدمة'] 
+            # عرض معاينة البيانات المنظفة
+            st.write("**معاينة البيانات بعد التنظيف:**")
+            preview_cols = [c for c in ['اسم العميل', 'رقم الجوال', 'المدينة', 'نوع الخدمة', 'التاريخ'] 
                           if c in uploaded_df.columns]
+            if not preview_cols:
+                preview_cols = list(uploaded_df.columns[:5])
             st.dataframe(uploaded_df[preview_cols].head(5), use_container_width=True)
+            
+            # عرض إحصائيات التنظيف
+            with st.expander("📊 تفاصيل التنظيف والتوحيد"):
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("عدد الصفوف", len(uploaded_df))
+                with col2:
+                    st.metric("عدد الأعمدة", len(uploaded_df.columns))
+                with col3:
+                    missing = uploaded_df.isnull().sum().sum()
+                    st.metric("قيم فارغة", missing)
+                
+                st.write("**الأعمدة المكتشفة:**")
+                st.write(", ".join(uploaded_df.columns.tolist()))
             
             # زر الحفظ والتحديث
             if st.button("💾 حفظ وتحديث البيانات", use_container_width=True, type="primary"):
@@ -1786,8 +1950,17 @@ with excel_col2:
                 st.info("⚠️ يُرجى تحديث الصفحة (Refresh) لرؤية البيانات الجديدة في لوحة التحكم")
                 
         except Exception as e:
-            st.error(f"❌ حدث خطأ أثناء معالجة الملف: {str(e)}")
-            st.warning("تأكد من أن الملف يحتوي على عمود اسمه 'البيانات' (Sheet name)")
+            st.error(f"❌ حدث خطأ أثناء معالجة الملف")
+            st.error(f"التفاصيل: {str(e)}")
+            
+            st.warning("""
+            **نصائح للحل:**
+            1. ✓ تأكد من أن الملف بصيغة Excel (.xlsx أو .xls)
+            2. ✓ تأكد من وجود ورقة باسم 'البيانات'
+            3. ✓ يمكن أن تكون أسماء الأعمدة مختلفة (سيتم توحيدها تلقائياً)
+            4. ✓ التواريخ يمكن بأي صيغة (ستُعالج تلقائياً)
+            5. ✓ المسافات والمحتويات الفارغة ستُنظف تلقائياً
+            """)
     elif uploaded_file is not None and not selected_user:
         st.warning("⚠️ يرجى اختيار اسمك أولاً قبل رفع الملف")
 
