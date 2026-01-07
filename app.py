@@ -1634,6 +1634,165 @@ def quick_summary(df: pd.DataFrame) -> str:
 st.write(quick_summary(filtered))
 st.markdown('</div>', unsafe_allow_html=True)
 
+# =============== تحميل وتنزيل Excel ===============
+st.markdown('<div class="glass" style="margin-top:1rem;">', unsafe_allow_html=True)
+st.markdown("### 📥📤 إدارة البيانات (تحميل وتنزيل)")
+
+excel_col1, excel_col2 = st.columns(2)
+
+# ====== تنزيل البيانات الحالية كـ Excel ======
+with excel_col1:
+    st.markdown("**📥 تحميل البيانات الحالية**")
+    
+    # إنشاء ملف Excel مع البيانات المصفاة أو الكاملة
+    export_df = filtered.copy() if not filtered.empty else df_scope.copy()
+    
+    # تحديد الأعمدة المراد تصديرها
+    export_cols = ['اسم العميل', 'رقم الجوال', 'المنطقة', 'المدينة', 'الشركة', 
+                   'نوع الخدمة', 'الخدمه المطلوبه', 'المسؤول', 'الملاحظات', 
+                   'الشهر', 'التاريخ']
+    export_cols = [c for c in export_cols if c in export_df.columns]
+    export_df_clean = export_df[export_cols].copy()
+    
+    # تحويل التاريخ إلى صيغة نصية للعرض
+    if 'التاريخ' in export_df_clean.columns:
+        export_df_clean['التاريخ'] = pd.to_datetime(export_df_clean['التاريخ'], errors='coerce').dt.strftime('%Y-%m-%d')
+    
+    # إنشاء ملف Excel
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        export_df_clean.to_excel(writer, sheet_name='البيانات', index=False)
+        
+        # تنسيق العمود الأول (تحديد العرض)
+        workbook = writer.book
+        worksheet = writer.sheets['البيانات']
+        
+        # تعريب الخطوط والتنسيق
+        from openpyxl.styles import Font, PatternFill, Alignment
+        
+        # تنسيق الرأس
+        header_fill = PatternFill(start_color="4A90E2", end_color="4A90E2", fill_type="solid")
+        header_font = Font(name='Arial', size=11, bold=True, color="FFFFFF")
+        
+        for col_num, col_title in enumerate(export_cols, 1):
+            cell = worksheet.cell(row=1, column=col_num)
+            cell.fill = header_fill
+            cell.font = header_font
+            cell.alignment = Alignment(horizontal='center', vertical='center', wrap_text=True)
+        
+        # تحديد عرض الأعمدة
+        for col_num, col_title in enumerate(export_cols, 1):
+            max_length = len(str(col_title))
+            adjusted_width = min(max_length + 2, 30)
+            worksheet.column_dimensions[chr(64 + col_num)].width = adjusted_width
+    
+    output.seek(0)
+    
+    # زر التحميل
+    st.download_button(
+        label="📥 تحميل ملف Excel",
+        data=output.getvalue(),
+        file_name=f"call_center_data_{pd.Timestamp.now().strftime('%Y%m%d_%H%M%S')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
+    )
+    
+    st.caption(f"📊 عدد الصفوف: {len(export_df_clean)}")
+
+# ====== رفع البيانات من Excel ======
+with excel_col2:
+    st.markdown("**📤 رفع بيانات جديدة**")
+    
+    # اختيار اسم المستخدم (مقدم الخدمة)
+    user_names = providers + ["مستخدم جديد"]
+    selected_user = st.selectbox(
+        "اختر اسمك (مقدم الخدمة)",
+        user_names,
+        help="اختر اسمك من القائمة أو أضف اسم جديد"
+    )
+    
+    # إذا اختار مستخدم جديد، اطلب الاسم يدويًا
+    custom_user_name = None
+    if selected_user == "مستخدم جديد":
+        custom_user_name = st.text_input(
+            "أدخل اسمك (الاسم الذي سيُحفظ به الملف)",
+            placeholder="مثال: أحمد",
+            help="هذا الاسم سيُستخدم لحفظ البيانات"
+        )
+        if custom_user_name:
+            selected_user = custom_user_name.strip()
+    
+    # رفع الملف
+    uploaded_file = st.file_uploader(
+        "اختر ملف Excel للرفع",
+        type=['xlsx', 'xls'],
+        help="يجب أن يحتوي الملف على نفس تنسيق الأعمدة"
+    )
+    
+    if uploaded_file is not None and selected_user:
+        try:
+            # قراءة الملف المرفوع
+            uploaded_df = pd.read_excel(uploaded_file, sheet_name='البيانات')
+            
+            st.success(f"✅ تم قراءة الملف بنجاح! عدد الصفوف: {len(uploaded_df)}")
+            
+            # توحيد أسماء الأعمدة
+            uploaded_df = normalize_columns(uploaded_df)
+            
+            # تنسيق التاريخ
+            if "التاريخ/Date" not in uploaded_df.columns and "التاريخ" in uploaded_df.columns:
+                try:
+                    uploaded_df["التاريخ/Date"] = pd.to_datetime(uploaded_df["التاريخ"], errors="coerce")
+                except:
+                    uploaded_df["التاريخ/Date"] = pd.NaT
+            
+            # إضافة معلومات مقدم الخدمة
+            uploaded_df["مقدم الخدمة (ملف)"] = selected_user
+            
+            # إضافة أعمدة الأسبوع
+            uploaded_df = add_week_columns(uploaded_df)
+            
+            # عرض معاينة البيانات
+            st.write("**معاينة البيانات المرفوعة:**")
+            preview_cols = [c for c in ['اسم العميل', 'رقم الجوال', 'المدينة', 'نوع الخدمة'] 
+                          if c in uploaded_df.columns]
+            st.dataframe(uploaded_df[preview_cols].head(5), use_container_width=True)
+            
+            # زر الحفظ والتحديث
+            if st.button("💾 حفظ وتحديث البيانات", use_container_width=True, type="primary"):
+                # المسار المطلوب لحفظ الملف
+                data_folder = "data"
+                os.makedirs(data_folder, exist_ok=True)
+                
+                file_path = os.path.join(data_folder, f"{selected_user}.csv")
+                
+                # إذا كان الملف موجود، ندمج البيانات القديمة مع الجديدة
+                if os.path.exists(file_path):
+                    existing_df = pd.read_csv(file_path, encoding="utf-8-sig")
+                    existing_df = normalize_columns(existing_df)
+                    
+                    # دمج البيانات (الإضافة والحفاظ على البيانات القديمة)
+                    combined_df = pd.concat([existing_df, uploaded_df], ignore_index=True, sort=False)
+                    
+                    st.info(f"📊 تم دمج البيانات: {len(existing_df)} صف قديم + {len(uploaded_df)} صف جديد = {len(combined_df)} صف إجمالي")
+                else:
+                    combined_df = uploaded_df
+                    st.info(f"📊 تم إنشاء ملف جديد مع {len(uploaded_df)} صف")
+                
+                # حفظ البيانات المدمجة
+                combined_df.to_csv(file_path, index=False, encoding="utf-8-sig")
+                
+                st.success(f"✅ تم حفظ البيانات بنجاح في {file_path}!")
+                st.info("⚠️ يُرجى تحديث الصفحة (Refresh) لرؤية البيانات الجديدة في لوحة التحكم")
+                
+        except Exception as e:
+            st.error(f"❌ حدث خطأ أثناء معالجة الملف: {str(e)}")
+            st.warning("تأكد من أن الملف يحتوي على عمود اسمه 'البيانات' (Sheet name)")
+    elif uploaded_file is not None and not selected_user:
+        st.warning("⚠️ يرجى اختيار اسمك أولاً قبل رفع الملف")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
 # =============== تذييل مع معلومات إضافية ===============
 st.markdown('<div class="glass" style="margin-top:1.5rem; text-align:center;">', unsafe_allow_html=True)
 st.markdown(f"""
